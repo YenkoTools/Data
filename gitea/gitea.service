@@ -1,0 +1,20 @@
+[Unit]
+Description=Gitea Container Service
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/gitea/gitea.sh start
+ExecStop=/opt/gitea/gitea.sh stop
+ExecReload=/opt/gitea/gitea.sh status
+RemainAfterExit=true
+User=gitea
+Group=gitea
+TimeoutStartSec=60
+TimeoutStopSec=30
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

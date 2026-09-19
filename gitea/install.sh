@@ -6,8 +6,8 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-SERVICE_USER="qdrant"
-INSTALL_DIR="/opt/qdrant"
+SERVICE_USER="gitea"
+INSTALL_DIR="/opt/gitea"
 
 if id "$SERVICE_USER" &>/dev/null; then
     echo "User '$SERVICE_USER' already exists, continuing..."
@@ -24,24 +24,24 @@ loginctl enable-linger "$SERVICE_USER"
 
 mkdir -p "$INSTALL_DIR"
 
-cp -v qdrant.sh "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/qdrant.sh"
+cp -v gitea.sh "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/gitea.sh"
 
-cp -v qdrant.service /etc/systemd/system/
+cp -v gitea.service /etc/systemd/system/
 
 systemctl daemon-reexec
 systemctl daemon-reload
-systemctl enable qdrant.service
+systemctl enable gitea.service
 
 echo ""
 echo "Installation complete!"
 echo ""
-echo "To start Qdrant:"
-echo "  sudo systemctl start qdrant.service"
+echo "To start Gitea:"
+echo "  sudo systemctl start gitea.service"
 echo ""
 echo "To check status:"
-echo "  sudo systemctl status qdrant.service"
+echo "  sudo systemctl status gitea.service"
 echo ""
 echo "To view logs:"
-echo "  sudo journalctl -xeu qdrant.service"
+echo "  sudo journalctl -xeu gitea.service"
 echo ""

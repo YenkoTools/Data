@@ -22,6 +22,8 @@ echo "User '$SERVICE_USER' added to docker group"
 
 loginctl enable-linger "$SERVICE_USER"
 
+mkdir -p "$INSTALL_DIR"
+
 cp -v mssql.sh "$INSTALL_DIR/"
 chmod +x "$INSTALL_DIR/mssql.sh"
 
