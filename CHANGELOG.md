@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Qdrant `uninstall.sh` script to stop/disable the service, remove the container and systemd unit, and clean up the install directory, with an interactive prompt (and `--purge-data` flag) before deleting the data directory, and an optional `--remove-user` flag to remove the service user
 - SQL Server systemd-managed configuration with `mssql-systemd.sh` script for better security
 - SQL Server standalone configuration with `mssql.sh` script for non-systemd usage
 - Comprehensive SQL Server installation script with root/sudo verification
