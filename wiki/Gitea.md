@@ -126,7 +126,7 @@ On the first visit to `http://localhost:3001`, Gitea presents an installation wi
 | Database type | PostgreSQL (pre-filled from `gitea.sh`; host `gitea-db:5432`, database/user `gitea`) |
 | Site URL | `http://localhost:3001` |
 | SSH server domain | `localhost` |
-| SSH port | `2222` |
+| SSH port | `2222` (pre-filled from `PORT_SSH` in `gitea.sh`) |
 | HTTP port | `3000` (internal container port, not the mapped host port) |
 | Log path | `/data/gitea/log` |
 

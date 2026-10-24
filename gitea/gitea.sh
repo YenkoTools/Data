@@ -80,6 +80,8 @@ start_container() {
         -v /etc/localtime:/etc/localtime:ro \
         -e USER_UID=$(id -u) \
         -e USER_GID=$(id -g) \
+        -e GITEA__server__SSH_PORT=${PORT_SSH} \
+        -e GITEA__server__SSH_LISTEN_PORT=22 \
         -e GITEA__database__DB_TYPE=postgres \
         -e GITEA__database__HOST=${DB_CONTAINER_NAME}:5432 \
         -e GITEA__database__NAME=$DB_NAME \
