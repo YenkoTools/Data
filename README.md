@@ -45,6 +45,19 @@ See [dockhand/README.md](dockhand/README.md) for detailed setup and usage instru
 
 Resource: https://dockhand.pro
 
+### gitea/
+Management scripts to run Gitea, a lightweight self-hosted Git service, as a systemd service.
+
+- Systemd service integration with auto-start on boot
+- Web UI on port 3001 (port 3000 is used by Dockhand)
+- Git over SSH on port 2222
+- Dedicated PostgreSQL database container (`gitea-db`) on a private Docker network
+- Persistent data storage and health check monitoring
+
+See [gitea/README.md](gitea/README.md) for detailed setup and usage instructions.
+
+Resource: https://about.gitea.com
+
 ### json-server/
 RESTful service for testing and prototyping. Provides a full fake REST API with zero coding.
 

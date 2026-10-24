@@ -2,6 +2,8 @@
 
 Gitea is a lightweight, self-hosted Git service with a web UI, issue tracking, pull requests, and CI/CD pipelines. It is compatible with GitHub workflows and runs entirely on your local infrastructure.
 
+The service runs two containers: Gitea and a dedicated PostgreSQL database (`gitea-db`). Both are started and stopped together by `gitea.sh` and communicate over a private Docker network.
+
 ## Table of Contents
 
 1. [Overview](#overview)
@@ -13,9 +15,11 @@ Gitea is a lightweight, self-hosted Git service with a web UI, issue tracking, p
 7. [First-Run Setup](#first-run-setup)
 8. [Accessing Gitea](#accessing-gitea)
 9. [Configuring Repository Storage](#configuring-repository-storage)
-10. [Health Checks](#health-checks)
-11. [Troubleshooting](#troubleshooting)
-12. [Additional Resources](#additional-resources)
+10. [Backups](#backups)
+11. [CI/CD with Gitea Actions](#cicd-with-gitea-actions)
+12. [Health Checks](#health-checks)
+13. [Troubleshooting](#troubleshooting)
+14. [Additional Resources](#additional-resources)
 
 ---
 
@@ -28,9 +32,16 @@ Gitea is a lightweight, self-hosted Git service with a web UI, issue tracking, p
 | Service user | `gitea` |
 | Web UI | `http://127.0.0.1:3001` |
 | SSH clone port | `2222` |
-| Data path | `/home/gitea/.local/share/gitea-data` |
+| Data path | `/opt/gitea/.local/share/gitea-data` |
+| Database image | `postgres:17` |
+| Database container | `gitea-db` |
+| Database name / user | `gitea` / `gitea` |
+| Database data path | `/opt/gitea/.local/share/gitea-db-data` |
+| Docker network | `gitea-network` |
 
 Port 3001 is used for the web UI because port 3000 is occupied by [Dockhand](../dockhand/).
+
+The database port is not published to the host. Gitea reaches PostgreSQL at `gitea-db:5432` on `gitea-network`, so it does not conflict with the standalone [pgsql](../pgsql/) service on port 5432. The database password is set by `DB_PASSWORD` in `gitea.sh`; change it before the first start.
 
 ---
 
@@ -45,7 +56,7 @@ Port 3001 is used for the web UI because port 3000 is occupied by [Dockhand](../
 
 | File | Description |
 |------|-------------|
-| `gitea.sh` | Container management script (start/stop/status/health) |
+| `gitea.sh` | Container management script for Gitea and its PostgreSQL database (start/stop/status/health) |
 | `gitea.service` | systemd service unit file |
 | `install.sh` | One-time installation script (requires root) |
 | `README.md` | This file |
@@ -124,14 +135,14 @@ On the first visit to `http://localhost:3001`, Gitea presents an installation wi
 
 | Setting | Value |
 |---------|-------|
-| Database type | SQLite3 (simplest; no external DB needed) |
+| Database type | PostgreSQL (pre-filled from `gitea.sh`; host `gitea-db:5432`, database/user `gitea`) |
 | Site URL | `http://localhost:3001` |
 | SSH server domain | `localhost` |
 | SSH port | `2222` |
 | HTTP port | `3000` (internal container port, not the mapped host port) |
 | Log path | `/data/gitea/log` |
 
-Create an administrator account on the same page, then click **Install Gitea**.
+The database fields are pre-filled from the environment variables set in `gitea.sh` and should not be changed. Create an administrator account on the same page, then click **Install Gitea**.
 
 ---
 
@@ -166,7 +177,7 @@ git clone git@localhost:user/repo.git
 
 By default, Gitea stores all git repositories inside the data directory at:
 ```
-/home/gitea/.local/share/gitea-data/gitea/repositories/
+/opt/gitea/.local/share/gitea-data/gitea/repositories/
 ```
 
 ### Using /home/jim/Vault as the repository root
@@ -195,7 +206,51 @@ After editing `gitea.sh`, restart the service:
 sudo systemctl restart gitea.service
 ```
 
-**Note:** If you change `GITEA__repository__ROOT` after initial setup, also update the `ROOT` value under `[repository]` in Gitea's `app.ini` (found at `/home/gitea/.local/share/gitea-data/gitea/conf/app.ini`) and migrate existing repositories via **Admin panel → Git Repositories → Resync**.
+**Note:** If you change `GITEA__repository__ROOT` after initial setup, also update the `ROOT` value under `[repository]` in Gitea's `app.ini` (found at `/opt/gitea/.local/share/gitea-data/gitea/conf/app.ini`) and migrate existing repositories via **Admin panel → Git Repositories → Resync**.
+
+---
+
+## Backups
+
+Gitea state is split between the Gitea data directory (repositories, `app.ini`, attachments) and the PostgreSQL data directory. Back up both together while the service is stopped:
+
+```bash
+sudo systemctl stop gitea.service
+sudo tar -czf gitea-backup-$(date +%F).tar.gz -C /opt/gitea/.local/share gitea-data gitea-db-data
+sudo systemctl start gitea.service
+```
+
+Alternatively, back up while the service is running. `gitea dump` captures repositories, configuration, and a SQL dump of the database:
+
+```bash
+docker exec -u git -w /tmp gitea gitea dump -c /data/gitea/conf/app.ini -f /tmp/gitea-dump.zip
+docker cp gitea:/tmp/gitea-dump.zip ./gitea-dump-$(date +%F).zip
+docker exec gitea rm /tmp/gitea-dump.zip
+```
+
+For a database-only backup:
+
+```bash
+docker exec gitea-db pg_dump -U gitea -d gitea > gitea-db-$(date +%F).sql
+```
+
+If repositories are stored outside the data directory (see [Configuring Repository Storage](#configuring-repository-storage)), back up that location as well.
+
+---
+
+## CI/CD with Gitea Actions
+
+Gitea Actions uses GitHub Actions–compatible workflow syntax (`.gitea/workflows/*.yml`). Jobs run on a separate `act_runner` container, which is not part of this service.
+
+To use Actions:
+
+1. Confirm Actions is enabled in `app.ini` (enabled by default in recent Gitea releases):
+   ```ini
+   [actions]
+   ENABLED = true
+   ```
+2. Generate a runner registration token in **Site Administration → Actions → Runners**.
+3. Run an [`act_runner`](https://docs.gitea.com/usage/actions/act-runner) container pointed at `http://<host-ip>:3001` with that token.
 
 ---
 
@@ -211,8 +266,12 @@ sudo -u gitea /opt/gitea/gitea.sh health
 # Test the web UI endpoint directly
 curl -I http://127.0.0.1:3001
 
+# Check the database
+docker exec gitea-db pg_isready -U gitea -d gitea
+
 # View container logs
 docker logs gitea
+docker logs gitea-db
 ```
 
 ---
@@ -228,8 +287,23 @@ docker inspect --format='{{.State.Health.Status}}' gitea
 **Permission denied on data directory**
 The container's internal user UID is set to the `gitea` service user's UID at start time. If the data directory was created by a different user, fix ownership:
 ```bash
-sudo chown -R gitea:gitea /home/gitea/.local/share/gitea-data
+sudo chown -R gitea:gitea /opt/gitea/.local/share/gitea-data
 ```
+
+**Gitea cannot connect to the database**
+Confirm both containers are running and attached to `gitea-network`:
+```bash
+sudo -u gitea /opt/gitea/gitea.sh status
+docker network inspect gitea-network --format '{{range .Containers}}{{.Name}} {{end}}'
+docker logs gitea-db
+```
+If `DB_PASSWORD` in `gitea.sh` was changed after the database was first created, PostgreSQL keeps the original password. Either revert it, or update it in the database:
+```bash
+docker exec -it gitea-db psql -U gitea -d gitea -c "ALTER USER gitea PASSWORD 'new_password';"
+```
+
+**Upgrading PostgreSQL**
+The database image is pinned to `postgres:17` because PostgreSQL major versions cannot read each other's data directories. To upgrade, take a `gitea dump` or `pg_dump`, change `DB_IMAGE`, start with an empty `gitea-db-data` directory, and restore.
 
 **SSH clone failing on port 2222**
 Confirm the container is running and port 2222 is bound:
@@ -247,4 +321,7 @@ Edit `PORT_WEB` in `/opt/gitea/gitea.sh` and update the Site URL in Gitea's `app
 
 - [Gitea Docker Installation](https://docs.gitea.com/installation/install-with-docker)
 - [Gitea Configuration Reference](https://docs.gitea.com/administration/config-cheat-sheet)
+- [Gitea Database Preparation](https://docs.gitea.com/installation/database-prep)
+- [Gitea Backup and Restore](https://docs.gitea.com/administration/backup-and-restore)
+- [Gitea Actions Overview](https://docs.gitea.com/usage/actions/overview)
 - [Gitea API Documentation](http://localhost:3001/api/swagger)

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Gitea self-hosted Git service (`gitea/`) with `install.sh`, `gitea.sh` management script, `gitea.service` systemd unit, and dedicated PostgreSQL database container (`gitea-db`, `postgres:17`) on a private `gitea-network` bridge network, and README covering first-run setup, SSH cloning on port 2222, repository storage, backups, and Gitea Actions
+- Gitea wiki page and entries in the project README and wiki home
 - Qdrant `uninstall.sh` script to stop/disable the service, remove the container and systemd unit, and clean up the install directory, with an interactive prompt (and `--purge-data` flag) before deleting the data directory, and an optional `--remove-user` flag to remove the service user
 - SQL Server systemd-managed configuration with `mssql-systemd.sh` script for better security
 - SQL Server standalone configuration with `mssql.sh` script for non-systemd usage

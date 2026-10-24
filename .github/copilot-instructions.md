@@ -96,9 +96,11 @@ Docker container management web UI
 Self-hosted Git service with web UI, issue tracking, and pull requests
 - Image: `docker.gitea.com/gitea:latest`
 - Port 3001 (Web UI; port 3000 is occupied by Dockhand), port 2222 (SSH)
-- Uses explicit port mapping (not `--network host`)
-- Data path: `/home/gitea/.local/share/gitea-data`
-- Git repositories stored at `/home/jim/Vault` (configurable via `GITEA__repository__ROOT`)
+- Uses a custom Docker bridge network `gitea-network` with explicit port mapping (not `--network host`)
+- Runs a dedicated PostgreSQL container `gitea-db` (`postgres:17`, pinned) on the same network; database port is not published to the host
+- `gitea.sh` starts the database first and waits for `pg_isready` before starting Gitea; `stop` removes both containers
+- Data paths: `/opt/gitea/.local/share/gitea-data` (Gitea), `/opt/gitea/.local/share/gitea-db-data` (PostgreSQL)
+- Git repositories stored in the data path by default; can be moved (e.g. to `/home/jim/Vault`) via a bind mount and `GITEA__repository__ROOT`
 
 ### json-server/
 RESTful API mock server — multiple instances on ports 3010, 3011, 3012
