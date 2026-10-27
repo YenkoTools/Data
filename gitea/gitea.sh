@@ -15,6 +15,13 @@ DB_USER="gitea"
 DB_PASSWORD="P@ssword92"
 DB_DATA_PATH="$HOME/.local/share/gitea-db-data"
 
+# Gitea Actions runner (act_runner); registers itself on first start after setup
+RUNNER_CONTAINER_NAME="gitea-runner"
+RUNNER_IMAGE="docker.gitea.com/act_runner:latest"
+RUNNER_NAME="$(hostname)-runner"
+RUNNER_DATA_PATH="$HOME/.local/share/gitea-runner-data"
+DOCKER_SOCKET="/var/run/docker.sock"
+
 start_database() {
     echo "Starting Gitea PostgreSQL container..."
 
@@ -87,6 +94,7 @@ start_container() {
         -e GITEA__database__NAME=$DB_NAME \
         -e GITEA__database__USER=$DB_USER \
         -e "GITEA__database__PASSWD=$DB_PASSWORD" \
+        -e GITEA__actions__ENABLED=true \
         --health-cmd "curl -sf http://localhost:3000 || exit 1" \
         --health-interval 30s \
         --health-timeout 5s \
@@ -95,9 +103,103 @@ start_container() {
         "$IMAGE"
 
     echo "Gitea container started successfully."
+
+    start_runner
+}
+
+write_runner_config() {
+    # Only written once so local edits to config.yaml are preserved
+    [ -f "$RUNNER_DATA_PATH/config.yaml" ] && return 0
+
+    cat > "$RUNNER_DATA_PATH/config.yaml" <<'YAML'
+log:
+  level: info
+
+runner:
+  file: /data/.runner
+  capacity: 2
+  timeout: 3h
+  labels:
+    - "ubuntu-latest:docker://docker.gitea.com/runner-images:ubuntu-latest"
+    - "ubuntu-24.04:docker://docker.gitea.com/runner-images:ubuntu-24.04"
+    - "ubuntu-22.04:docker://docker.gitea.com/runner-images:ubuntu-22.04"
+
+cache:
+  enabled: true
+  dir: /data/cache
+
+container:
+  # Job containers use the host network so actions/checkout can reach
+  # Gitea at its ROOT_URL (http://localhost:3001)
+  network: host
+  privileged: false
+  valid_volumes: []
+  force_pull: false
+
+host:
+  workdir_parent: /data/workdir
+YAML
+}
+
+wait_for_gitea() {
+    for i in $(seq 1 30); do
+        if docker exec $CONTAINER_NAME curl -sf http://localhost:3000/api/healthz >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+    done
+    return 1
+}
+
+start_runner() {
+    echo "Starting Gitea Actions runner..."
+
+    docker rm -f $RUNNER_CONTAINER_NAME 2>/dev/null || true
+
+    mkdir -p "$RUNNER_DATA_PATH"
+    write_runner_config
+
+    local token=""
+    if [ ! -s "$RUNNER_DATA_PATH/.runner" ]; then
+        if ! wait_for_gitea; then
+            echo "Warning: Gitea did not become ready; skipping runner start"
+            return 0
+        fi
+
+        # Fails until the first-run installation wizard has been completed
+        token=$(docker exec -u git $CONTAINER_NAME gitea actions generate-runner-token 2>/dev/null | tail -n 1)
+        if [ -z "$token" ]; then
+            echo "Runner not registered: complete the Gitea installation wizard, then restart the service."
+            return 0
+        fi
+        echo "Registering runner '$RUNNER_NAME'..."
+    fi
+
+    # Run as the service user so runner files stay owned by it; the docker
+    # socket group grants access to start job containers
+    docker run -d \
+        --name $RUNNER_CONTAINER_NAME \
+        --network $NETWORK_NAME \
+        --restart=unless-stopped \
+        --user "$(id -u):$(id -g)" \
+        --group-add "$(stat -c %g $DOCKER_SOCKET)" \
+        -v "$RUNNER_DATA_PATH:/data" \
+        -v "$DOCKER_SOCKET:/var/run/docker.sock" \
+        -e HOME=/data \
+        -e CONFIG_FILE=/data/config.yaml \
+        -e GITEA_INSTANCE_URL=http://${CONTAINER_NAME}:3000 \
+        -e "GITEA_RUNNER_REGISTRATION_TOKEN=$token" \
+        -e "GITEA_RUNNER_NAME=$RUNNER_NAME" \
+        "$RUNNER_IMAGE"
+
+    echo "Gitea Actions runner started successfully."
 }
 
 stop_container() {
+    echo "Stopping Gitea Actions runner..."
+    docker stop "$RUNNER_CONTAINER_NAME" 2>/dev/null || echo "Runner container is not running."
+    docker rm "$RUNNER_CONTAINER_NAME" 2>/dev/null || echo "Runner container already removed."
+
     echo "Stopping Gitea container..."
     docker stop "$CONTAINER_NAME" 2>/dev/null || echo "Container is not running."
     docker rm "$CONTAINER_NAME" 2>/dev/null || echo "Container already removed."
@@ -132,6 +234,15 @@ check_health() {
     if ! curl -sf "http://127.0.0.1:${PORT_WEB}" >/dev/null 2>&1; then
         echo "Gitea web UI is not responding"
         return 1
+    fi
+
+    if [ -s "$RUNNER_DATA_PATH/.runner" ]; then
+        if ! docker ps --format "{{.Names}}" | grep -q "^${RUNNER_CONTAINER_NAME}$"; then
+            echo "Actions runner is registered but not running"
+            return 1
+        fi
+    else
+        echo "Note: Actions runner is not registered yet"
     fi
 
     echo "Gitea is healthy and accessible at http://localhost:${PORT_WEB} (database: ${DB_CONTAINER_NAME})"

@@ -2,7 +2,7 @@
 
 Gitea is a lightweight, self-hosted Git service with a web UI, issue tracking, pull requests, and CI/CD pipelines. It is compatible with GitHub workflows and runs entirely on your local infrastructure.
 
-The service runs two containers: Gitea and a dedicated PostgreSQL database (`gitea-db`). Both are started and stopped together by `gitea.sh` and communicate over a private Docker network.
+The service runs three containers: Gitea, a dedicated PostgreSQL database (`gitea-db`), and a Gitea Actions runner (`gitea-runner`). All three are started and stopped together by `gitea.sh` and communicate over a private Docker network.
 
 ## Table of Contents
 
@@ -37,6 +37,8 @@ The service runs two containers: Gitea and a dedicated PostgreSQL database (`git
 | Database container | `gitea-db` |
 | Database name / user | `gitea` / `gitea` |
 | Database data path | `/opt/gitea/.local/share/gitea-db-data` |
+| Runner container | `gitea-runner` (Gitea Actions) |
+| Runner data path | `/opt/gitea/.local/share/gitea-runner-data` |
 | Docker network | `gitea-network` |
 
 Port 3001 is used for the web UI because port 3000 is occupied by [Dockhand](../dockhand/).
@@ -56,7 +58,7 @@ The database port is not published to the host. Gitea reaches PostgreSQL at `git
 
 | File | Description |
 |------|-------------|
-| `gitea.sh` | Container management script for Gitea and its PostgreSQL database (start/stop/status/health) |
+| `gitea.sh` | Container management script for Gitea, its PostgreSQL database, and the Actions runner (start/stop/status/health) |
 | `gitea.service` | systemd service unit file |
 | `install.sh` | One-time installation script (requires root) |
 | `README.md` | This file |
@@ -240,17 +242,64 @@ If repositories are stored outside the data directory (see [Configuring Reposito
 
 ## CI/CD with Gitea Actions
 
-Gitea Actions uses GitHub Actions–compatible workflow syntax (`.gitea/workflows/*.yml`). Jobs run on a separate `act_runner` container, which is not part of this service.
+Gitea Actions uses GitHub Actions–compatible workflow syntax (`.gitea/workflows/*.yml`). Actions is turned on by `gitea.sh` (`GITEA__actions__ENABLED=true`), and jobs run on an [`act_runner`](https://docs.gitea.com/usage/actions/act-runner) container (`gitea-runner`) that is started and stopped together with Gitea.
 
-To use Actions:
+| Property | Value |
+|----------|-------|
+| Runner image | `docker.gitea.com/act_runner:latest` |
+| Runner container | `gitea-runner` |
+| Runner name | `<hostname>-runner` |
+| Runner data path | `/opt/gitea/.local/share/gitea-runner-data` |
+| Runner config | `/opt/gitea/.local/share/gitea-runner-data/config.yaml` |
+| Labels | `ubuntu-latest`, `ubuntu-24.04`, `ubuntu-22.04` |
 
-1. Confirm Actions is enabled in `app.ini` (enabled by default in recent Gitea releases):
-   ```ini
-   [actions]
-   ENABLED = true
-   ```
-2. Generate a runner registration token in **Site Administration → Actions → Runners**.
-3. Run an [`act_runner`](https://docs.gitea.com/usage/actions/act-runner) container pointed at `http://<host-ip>:3001` with that token.
+### Registration
+
+The runner registers itself, so you do not need to copy a token by hand. When no registration exists yet, `gitea.sh start` runs `gitea actions generate-runner-token` inside the Gitea container and passes the token to the runner on its first start. The registration is stored in `.runner` in the runner data directory and reused on later starts.
+
+Token generation only works after the [first-run installation wizard](#first-run-setup) is finished. On a brand-new install the runner is skipped. Once the wizard is done, restart the service:
+
+```bash
+sudo systemctl restart gitea.service
+```
+
+The runner then shows up under **Site Administration → Actions → Runners**.
+
+### How jobs run
+
+- The runner reaches Gitea at `http://gitea:3000` over `gitea-network`.
+- Jobs run in sibling containers that the runner starts through the host Docker socket (`/var/run/docker.sock`).
+- Job containers use the host network (`container.network: host`), so `actions/checkout` can reach Gitea at its Site URL, `http://localhost:3001`.
+- The runner container runs as the `gitea` user and gets the Docker socket's group, so runner files stay owned by `gitea`.
+
+**Security note:** access to the Docker socket is equivalent to root on the host. Any workflow that runs on this runner can control the host's Docker daemon. Only run workflows from repositories you trust.
+
+### Example workflow
+
+Save as `.gitea/workflows/ci.yml` in a repository:
+
+```yaml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "Hello from Gitea Actions"
+```
+
+### Customizing the runner
+
+`config.yaml` is created on the first start and is not overwritten afterward. To change capacity, labels, or job container settings, edit it and restart the service. Run `docker run --rm docker.gitea.com/act_runner:latest generate-config` to see every available option.
+
+To re-register the runner, for example after deleting it in the web UI, remove the registration file and restart:
+
+```bash
+sudo rm /opt/gitea/.local/share/gitea-runner-data/.runner
+sudo systemctl restart gitea.service
+```
 
 ---
 
@@ -272,6 +321,7 @@ docker exec gitea-db pg_isready -U gitea -d gitea
 # View container logs
 docker logs gitea
 docker logs gitea-db
+docker logs gitea-runner
 ```
 
 ---
@@ -305,6 +355,13 @@ docker exec -it gitea-db psql -U gitea -d gitea -c "ALTER USER gitea PASSWORD 'n
 **Upgrading PostgreSQL**
 The database image is pinned to `postgres:17` because PostgreSQL major versions cannot read each other's data directories. To upgrade, take a `gitea dump` or `pg_dump`, change `DB_IMAGE`, start with an empty `gitea-db-data` directory, and restore.
 
+**Actions runner not registered or not picking up jobs**
+Check the runner log, and confirm the workflow's `runs-on` matches one of the runner's labels:
+```bash
+docker logs gitea-runner
+```
+If the log shows a registration error, delete `.runner` and restart (see [Customizing the runner](#customizing-the-runner)). If `actions/checkout` cannot connect, make sure the Site URL (`ROOT_URL` in `app.ini`) is `http://localhost:3001`.
+
 **SSH clone failing on port 2222**
 Confirm the container is running and port 2222 is bound:
 ```bash
@@ -324,4 +381,5 @@ Edit `PORT_WEB` in `/opt/gitea/gitea.sh` and update the Site URL in Gitea's `app
 - [Gitea Database Preparation](https://docs.gitea.com/installation/database-prep)
 - [Gitea Backup and Restore](https://docs.gitea.com/administration/backup-and-restore)
 - [Gitea Actions Overview](https://docs.gitea.com/usage/actions/overview)
+- [Gitea act_runner](https://docs.gitea.com/usage/actions/act-runner)
 - [Gitea API Documentation](http://localhost:3001/api/swagger)

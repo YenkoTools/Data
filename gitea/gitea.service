@@ -12,7 +12,7 @@ ExecReload=/opt/gitea/gitea.sh status
 RemainAfterExit=true
 User=gitea
 Group=gitea
-TimeoutStartSec=120
+TimeoutStartSec=180
 TimeoutStopSec=30
 Restart=on-failure
 

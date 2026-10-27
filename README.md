@@ -52,6 +52,7 @@ Management scripts to run Gitea, a lightweight self-hosted Git service, as a sys
 - Web UI on port 3001 (port 3000 is used by Dockhand)
 - Git over SSH on port 2222
 - Dedicated PostgreSQL database container (`gitea-db`) on a private Docker network
+- Gitea Actions runner container (`gitea-runner`) that registers itself automatically
 - Persistent data storage and health check monitoring
 
 See [gitea/README.md](gitea/README.md) for detailed setup and usage instructions.
