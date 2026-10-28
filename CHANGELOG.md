@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Gitea Actions runner (`gitea-runner`, `act_runner`) managed by `gitea.sh` alongside Gitea and its database. It registers itself with a token from `gitea actions generate-runner-token`, runs jobs in sibling containers through the host Docker socket, and ships a default `config.yaml` with `ubuntu-latest`/`ubuntu-24.04`/`ubuntu-22.04` labels. Actions is enabled through `GITEA__actions__ENABLED`
+- Gitea self-hosted Git service (`gitea/`) with `install.sh`, `gitea.sh` management script, `gitea.service` systemd unit, and dedicated PostgreSQL database container (`gitea-db`, `postgres:17`) on a private `gitea-network` bridge network, and README covering first-run setup, SSH cloning on port 2222, repository storage, backups, and Gitea Actions
+- Gitea wiki page and entries in the project README and wiki home
+- Qdrant `uninstall.sh` script to stop/disable the service, remove the container and systemd unit, and clean up the install directory, with an interactive prompt (and `--purge-data` flag) before deleting the data directory, and an optional `--remove-user` flag to remove the service user
 - SQL Server systemd-managed configuration with `mssql-systemd.sh` script for better security
 - SQL Server standalone configuration with `mssql.sh` script for non-systemd usage
 - Comprehensive SQL Server installation script with root/sudo verification
@@ -17,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Data persistence documentation for SQL Server and Seq services
 
 ### Changed
+- Gitea Actions runner now uses the host network and registers at `http://localhost:3001` instead of `http://gitea:3000`, so job containers (which receive the runner's address as the server URL) can clone repositories
 - SQL Server container configuration to run as non-root user (removed `--user root` flag) for improved security
 - SQL Server installation scripts to check for existing `mssql` user and continue gracefully
 - Seq service configuration to properly expose web dashboard on host port 8081 (mapping to container port 80)

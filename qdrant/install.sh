@@ -6,27 +6,32 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-if id "qdrant" &>/dev/null; then
-    echo "User 'qdrant' already exists, continuing..."
+SERVICE_USER="qdrant"
+INSTALL_DIR="/opt/qdrant"
+
+if id "$SERVICE_USER" &>/dev/null; then
+    echo "User '$SERVICE_USER' already exists, continuing..."
 else
-    sudo useradd -m -d /opt/qdrant -s /bin/bash qdrant
-    echo "User 'qdrant' created"
+    useradd -m -d "$INSTALL_DIR" -s /bin/bash "$SERVICE_USER"
+    echo "User '$SERVICE_USER' created"
 fi
 
-# Add qdrant user to docker group for container access
-sudo usermod -aG docker qdrant
-echo "User 'qdrant' added to docker group"
+# Add user to docker group for container access
+usermod -aG docker "$SERVICE_USER"
+echo "User '$SERVICE_USER' added to docker group"
 
-sudo loginctl enable-linger qdrant
+loginctl enable-linger "$SERVICE_USER"
 
-sudo cp -v qdrant.sh /opt/qdrant/
-sudo chmod +x /opt/qdrant/qdrant.sh
+mkdir -p "$INSTALL_DIR"
 
-sudo cp -v qdrant.service /etc/systemd/system
+cp -v qdrant.sh "$INSTALL_DIR/"
+chmod +x "$INSTALL_DIR/qdrant.sh"
 
-sudo systemctl daemon-reexec
-sudo systemctl daemon-reload
-sudo systemctl enable qdrant.service
+cp -v qdrant.service /etc/systemd/system/
+
+systemctl daemon-reexec
+systemctl daemon-reload
+systemctl enable qdrant.service
 
 echo ""
 echo "Installation complete!"

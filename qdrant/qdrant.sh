@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CONTAINER_NAME="qdrant"
-IMAGE="qdrant/qdrant"
+IMAGE="qdrant/qdrant:latest"
 PORT_REST=6333
 PORT_GRPC=6334
 DATA_PATH="$HOME/.local/share/qdrant-data"
@@ -21,11 +21,11 @@ start_container() {
         --network host \
         --restart=unless-stopped \
         -v "$DATA_PATH:/qdrant/storage" \
-        --health-cmd "bash -c 'echo > /dev/tcp/127.0.0.1/${PORT_REST}'" \
+        --health-cmd "curl -sf http://127.0.0.1:${PORT_REST}/healthz || exit 1" \
         --health-interval 30s \
         --health-timeout 5s \
         --health-retries 3 \
-        --health-start-period 10s \
+        --health-start-period 15s \
         "$IMAGE"
 
     echo "Qdrant container started successfully."
@@ -54,7 +54,7 @@ check_health() {
         return 1
     fi
 
-    echo "Qdrant is healthy (REST API running on port ${PORT_REST}, gRPC on port ${PORT_GRPC})"
+    echo "Qdrant is healthy and accepting connections on port $PORT_REST (REST) and $PORT_GRPC (gRPC)"
     return 0
 }
 

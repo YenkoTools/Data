@@ -10,6 +10,7 @@ Welcome to the **Data Tools** wiki. This project provides management scripts and
 | [Azurite](Azurite) | Azure Storage Emulator (Blob, Queue, Table) | 10000, 10001, 10002 |
 | [Docker / WSL2 Setup](Docker-WSL2-Setup) | Guide to installing Docker CLI in WSL2 on Windows 11 | — |
 | [Dockhand](Dockhand) | Modern Docker management UI with container and stack orchestration | 3000 |
+| [Gitea](Gitea) | Self-hosted Git service with web UI, issues, pull requests, and Actions (with dedicated PostgreSQL) | 3001, 2222 |
 | [JSON Server](JSON-Server) | Fake REST API server for testing and prototyping | 3010, 3011, 3012 |
 | [PostgreSQL](PostgreSQL) | PostgreSQL database as a systemd-managed Docker container | 5432 |
 | [Qdrant](Qdrant) | High-performance vector database and similarity search engine | 6333, 6334 |
