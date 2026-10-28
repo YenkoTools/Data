@@ -175,11 +175,12 @@ start_runner() {
         echo "Registering runner '$RUNNER_NAME'..."
     fi
 
-    # Run as the service user so runner files stay owned by it; the docker
-    # socket group grants access to start job containers
+    # Host network so the runner and its job containers both reach Gitea at
+    # its ROOT_URL. Run as the service user so runner files stay owned by it;
+    # the docker socket group grants access to start job containers
     docker run -d \
         --name $RUNNER_CONTAINER_NAME \
-        --network $NETWORK_NAME \
+        --network host \
         --restart=unless-stopped \
         --user "$(id -u):$(id -g)" \
         --group-add "$(stat -c %g $DOCKER_SOCKET)" \
@@ -187,7 +188,7 @@ start_runner() {
         -v "$DOCKER_SOCKET:/var/run/docker.sock" \
         -e HOME=/data \
         -e CONFIG_FILE=/data/config.yaml \
-        -e GITEA_INSTANCE_URL=http://${CONTAINER_NAME}:3000 \
+        -e GITEA_INSTANCE_URL=http://localhost:${PORT_WEB} \
         -e "GITEA_RUNNER_REGISTRATION_TOKEN=$token" \
         -e "GITEA_RUNNER_NAME=$RUNNER_NAME" \
         "$RUNNER_IMAGE"

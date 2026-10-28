@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Data persistence documentation for SQL Server and Seq services
 
 ### Changed
+- Gitea Actions runner now uses the host network and registers at `http://localhost:3001` instead of `http://gitea:3000`, so job containers (which receive the runner's address as the server URL) can clone repositories
 - SQL Server container configuration to run as non-root user (removed `--user root` flag) for improved security
 - SQL Server installation scripts to check for existing `mssql` user and continue gracefully
 - Seq service configuration to properly expose web dashboard on host port 8081 (mapping to container port 80)
