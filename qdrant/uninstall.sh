@@ -8,7 +8,8 @@ fi
 
 SERVICE_USER="qdrant"
 INSTALL_DIR="/opt/qdrant"
-DATA_PATH="/home/$SERVICE_USER/.local/share/qdrant-data"
+# The service user's home is the install directory, so data lives inside it
+DATA_PATH="$INSTALL_DIR/.local/share/qdrant-data"
 
 REMOVE_USER=false
 PURGE_DATA=false
@@ -35,8 +36,8 @@ rm -f /etc/systemd/system/qdrant.service
 systemctl daemon-reload
 systemctl reset-failed qdrant.service 2>/dev/null || true
 
-echo "Removing install directory '$INSTALL_DIR'..."
-rm -rf "$INSTALL_DIR"
+echo "Removing management script '$INSTALL_DIR/qdrant.sh'..."
+rm -f "$INSTALL_DIR/qdrant.sh"
 
 if [ "$PURGE_DATA" = false ] && [ -d "$DATA_PATH" ]; then
     read -r -p "Delete data directory '$DATA_PATH'? [y/N] " REPLY
@@ -60,6 +61,12 @@ if [ "$REMOVE_USER" = true ]; then
     fi
 else
     echo "Leaving user '$SERVICE_USER' in place (use --remove-user to remove it)."
+fi
+
+# Only remove the install directory once it holds nothing worth keeping
+if [ "$PURGE_DATA" = true ]; then
+    echo "Removing install directory '$INSTALL_DIR'..."
+    rm -rf "$INSTALL_DIR"
 fi
 
 echo ""

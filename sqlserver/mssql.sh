@@ -54,7 +54,7 @@ check_health() {
         return 1
     fi
     
-    if ! docker exec -it "$CONTAINER_NAME" bash -c "$SQLCMD_COMMAND" >/dev/null 2>&1; then
+    if ! docker exec "$CONTAINER_NAME" bash -c "$SQLCMD_COMMAND" >/dev/null 2>&1; then
         echo "SQL Server is not responding"
         return 1
     fi

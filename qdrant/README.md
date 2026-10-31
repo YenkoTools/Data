@@ -1,6 +1,6 @@
 # Qdrant
 
-Qdrant is a high-performance, open-source vector database and similarity search engine. It provides production-ready service with a convenient API to store, search, and manage vectors with an additional payload. Qdrant is designed to support extended filtering, making it useful for neural network or semantic-based matching, faceted search, and other applications.
+Qdrant is an open-source vector database and similarity search engine. It stores vectors with a JSON payload and supports filtered nearest-neighbor search, which makes it useful for semantic search, recommendations, and retrieval-augmented generation (RAG).
 
 ## Table of Contents
 
@@ -10,12 +10,15 @@ Qdrant is a high-performance, open-source vector database and similarity search 
 4. [Installation](#installation)
 5. [Managing the Service](#managing-the-service)
 6. [Management Script Commands](#management-script-commands)
-7. [Running Manually with Docker](#running-manually-with-docker)
-8. [Connection Details](#connection-details)
-9. [Testing with Code](#testing-with-code)
-10. [Health Checks](#health-checks)
-11. [Troubleshooting](#troubleshooting)
-12. [Additional Resources](#additional-resources)
+7. [Connecting to Qdrant](#connecting-to-qdrant)
+8. [Usage Examples](#usage-examples)
+9. [Running Without systemd](#running-without-systemd)
+10. [Data Persistence and Backups](#data-persistence-and-backups)
+11. [Health Checks](#health-checks)
+12. [Troubleshooting](#troubleshooting)
+13. [Security Notes](#security-notes)
+14. [Uninstall](#uninstall)
+15. [Additional Resources](#additional-resources)
 
 ---
 
@@ -26,54 +29,65 @@ Qdrant is a high-performance, open-source vector database and similarity search 
 | Container image | `qdrant/qdrant:latest` |
 | Container name | `qdrant` |
 | Service user | `qdrant` |
+| systemd unit | `qdrant.service` |
+| Network mode | `host` |
 | REST API | `http://127.0.0.1:6333` |
-| gRPC API | `http://127.0.0.1:6334` |
+| gRPC API | `127.0.0.1:6334` |
 | Web UI | `http://127.0.0.1:6333/dashboard` |
-| Data path | `/home/qdrant/.local/share/qdrant-data` |
+| Data path | `/opt/qdrant/.local/share/qdrant-data` |
+| Upstream | <https://qdrant.tech> |
 
 ---
 
 ## Prerequisites
 
-- Docker installed and running on your system
-- Root / sudo access (for systemd installation)
+- Docker installed and running
+- Root or sudo access
+- Ports 6333 and 6334 free on the host
 
 ---
 
 ## Files
 
-| File | Description |
-|------|-------------|
-| `qdrant.sh` | Container management script (start/stop/status/health) |
-| `qdrant.service` | systemd service unit file |
-| `install.sh` | One-time installation script (requires root) |
-| `README.md` | This file |
+| File | Purpose | Installed to |
+|------|---------|--------------|
+| `qdrant.sh` | Container management script (`start`, `stop`, `status`, `health`) | `/opt/qdrant/qdrant.sh` |
+| `qdrant.service` | systemd unit file | `/etc/systemd/system/qdrant.service` |
+| `install.sh` | One-time installation script (requires root) | Not installed |
+| `uninstall.sh` | Removes the service, and optionally its data and user (requires root) | Not installed |
+| `README.md` | This document | Not installed |
 
 ---
 
 ## Installation
 
-Run the install script once to set up the service:
+1. Run the install script from this directory:
 
-```bash
-cd /path/to/Data/qdrant
-sudo ./install.sh
-```
+   ```bash
+   cd /path/to/Data/qdrant
+   sudo ./install.sh
+   ```
 
-**What the install script does:**
+2. Start the service for the first time:
 
-1. Creates a `qdrant` system user with home directory at `/opt/qdrant`
-2. Adds the `qdrant` user to the `docker` group
+   ```bash
+   sudo systemctl start qdrant.service
+   ```
+
+3. Confirm it is healthy:
+
+   ```bash
+   sudo -u qdrant /opt/qdrant/qdrant.sh health
+   ```
+
+**What `install.sh` does:**
+
+1. Creates the `qdrant` system user with home directory `/opt/qdrant`
+2. Adds `qdrant` to the `docker` group
 3. Enables user lingering (`loginctl enable-linger qdrant`)
-4. Copies `qdrant.sh` to `/opt/qdrant/` with execute permissions
+4. Copies `qdrant.sh` to `/opt/qdrant/` and makes it executable
 5. Copies `qdrant.service` to `/etc/systemd/system/`
-6. Runs `systemctl daemon-reload` and enables the service to start on boot
-
-After installation, start the service manually for the first time:
-
-```bash
-sudo systemctl start qdrant.service
-```
+6. Reloads systemd and enables the service to start on boot
 
 ---
 
@@ -89,7 +103,7 @@ sudo systemctl stop qdrant.service
 # Check status
 sudo systemctl status qdrant.service
 
-# Enable auto-start on boot (done by install script)
+# Enable auto-start on boot (done by install.sh)
 sudo systemctl enable qdrant.service
 
 # Disable auto-start
@@ -98,7 +112,7 @@ sudo systemctl disable qdrant.service
 # View logs
 sudo journalctl -xeu qdrant.service
 
-# Follow real-time logs
+# Follow logs in real time
 sudo journalctl -fu qdrant.service
 ```
 
@@ -106,22 +120,136 @@ sudo journalctl -fu qdrant.service
 
 ## Management Script Commands
 
-The `qdrant.sh` script can also be called directly as the `qdrant` user:
+Run the management script directly as the service user:
 
 ```bash
-sudo -u qdrant /opt/qdrant/qdrant.sh start
-sudo -u qdrant /opt/qdrant/qdrant.sh stop
-sudo -u qdrant /opt/qdrant/qdrant.sh status
-sudo -u qdrant /opt/qdrant/qdrant.sh health
+sudo -u qdrant /opt/qdrant/qdrant.sh <command>
 ```
 
-The health check queries the REST API `/healthz` endpoint to confirm the service is responding.
+| Command | Action |
+|---------|--------|
+| `start` | Removes any existing `qdrant` container and starts a new one |
+| `stop` | Stops and removes the container |
+| `status` | Shows the container's state (`docker ps -a`) |
+| `health` | Confirms the container is running and the REST API `/healthz` endpoint responds |
 
 ---
 
-## Running Manually with Docker
+## Connecting to Qdrant
 
-Use these commands when running without systemd (e.g., on Windows 11 or for a quick test):
+| Endpoint | Address |
+|----------|---------|
+| REST API | `http://127.0.0.1:6333` |
+| gRPC API | `127.0.0.1:6334` |
+| Web UI | `http://127.0.0.1:6333/dashboard` |
+| Health | `http://127.0.0.1:6333/healthz` |
+| Collections | `http://127.0.0.1:6333/collections` |
+
+No API key is configured, so clients connect without authentication. The Python client uses REST (6333) by default; the .NET client uses gRPC (6334).
+
+---
+
+## Usage Examples
+
+Each example creates a 4-dimensional collection, inserts two points, and finds the nearest neighbors.
+
+### curl
+
+```bash
+# Create a collection
+curl -X PUT http://127.0.0.1:6333/collections/my_collection \
+  -H "Content-Type: application/json" \
+  -d '{"vectors": {"size": 4, "distance": "Cosine"}}'
+
+# Insert points
+curl -X PUT "http://127.0.0.1:6333/collections/my_collection/points?wait=true" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "points": [
+      {"id": 1, "vector": [0.1, 0.2, 0.3, 0.4], "payload": {"label": "first"}},
+      {"id": 2, "vector": [0.5, 0.6, 0.7, 0.8], "payload": {"label": "second"}}
+    ]
+  }'
+
+# Query for nearest neighbors
+curl -X POST http://127.0.0.1:6333/collections/my_collection/points/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": [0.1, 0.2, 0.3, 0.4], "limit": 3, "with_payload": true}'
+```
+
+### Python
+
+Requires `pip install qdrant-client`.
+
+```python
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PointStruct, VectorParams
+
+client = QdrantClient(host="127.0.0.1", port=6333)
+
+client.create_collection(
+    collection_name="my_collection",
+    vectors_config=VectorParams(size=4, distance=Distance.COSINE),
+)
+
+client.upsert(
+    collection_name="my_collection",
+    points=[
+        PointStruct(id=1, vector=[0.1, 0.2, 0.3, 0.4], payload={"label": "first"}),
+        PointStruct(id=2, vector=[0.5, 0.6, 0.7, 0.8], payload={"label": "second"}),
+    ],
+)
+
+results = client.query_points(
+    collection_name="my_collection",
+    query=[0.1, 0.2, 0.3, 0.4],
+    limit=3,
+)
+print(results.points)
+```
+
+### .NET
+
+Requires `dotnet add package Qdrant.Client`.
+
+```csharp
+using Qdrant.Client;
+using Qdrant.Client.Grpc;
+
+var client = new QdrantClient("127.0.0.1", 6334);
+
+await client.CreateCollectionAsync("my_collection", new VectorParams
+{
+    Size = 4,
+    Distance = Distance.Cosine,
+});
+
+await client.UpsertAsync("my_collection", new[]
+{
+    new PointStruct
+    {
+        Id = 1,
+        Vectors = new[] { 0.1f, 0.2f, 0.3f, 0.4f },
+        Payload = { ["label"] = "first" },
+    },
+    new PointStruct
+    {
+        Id = 2,
+        Vectors = new[] { 0.5f, 0.6f, 0.7f, 0.8f },
+        Payload = { ["label"] = "second" },
+    },
+});
+
+var results = await client.SearchAsync("my_collection",
+    new[] { 0.1f, 0.2f, 0.3f, 0.4f }, limit: 3);
+Console.WriteLine($"Found {results.Count} results");
+```
+
+---
+
+## Running Without systemd
+
+For a quick test, or on a machine without systemd (such as Windows 11), run the container directly.
 
 **Linux / macOS:**
 
@@ -145,135 +273,37 @@ docker run -d `
   qdrant/qdrant:latest
 ```
 
-| Port | Service |
-|------|---------|
-| 6333 | REST API and Web UI |
-| 6334 | gRPC API |
-
 ---
 
-## Connection Details
+## Data Persistence and Backups
 
-| Endpoint | URL |
-|----------|-----|
-| REST API | `http://127.0.0.1:6333` |
-| gRPC API | `http://127.0.0.1:6334` |
-| Web UI (dashboard) | `http://127.0.0.1:6333/dashboard` |
-| Health check | `http://127.0.0.1:6333/healthz` |
-| Collections list | `http://127.0.0.1:6333/collections` |
+Data is stored on the host at `/opt/qdrant/.local/share/qdrant-data` and mounted into the container at `/qdrant/storage`. It survives container restarts and re-creation.
 
-Qdrant does not require authentication by default. For production use, configure an API key via the `QDRANT__SERVICE__API_KEY` environment variable.
-
----
-
-## Testing with Code
-
-### Python Example
-
-Install the client:
+**Back up everything (service stopped):**
 
 ```bash
-pip install qdrant-client
+sudo systemctl stop qdrant.service
+sudo tar -czf qdrant-backup-$(date +%F).tar.gz -C /opt/qdrant/.local/share qdrant-data
+sudo systemctl start qdrant.service
 ```
 
-```python
-from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams, PointStruct
-
-client = QdrantClient(host="127.0.0.1", port=6333)
-
-# Create a collection
-client.create_collection(
-    collection_name="my_collection",
-    vectors_config=VectorParams(size=4, distance=Distance.COSINE),
-)
-
-# Insert vectors
-client.upsert(
-    collection_name="my_collection",
-    points=[
-        PointStruct(id=1, vector=[0.1, 0.2, 0.3, 0.4], payload={"label": "first"}),
-        PointStruct(id=2, vector=[0.5, 0.6, 0.7, 0.8], payload={"label": "second"}),
-    ],
-)
-
-# Search for nearest neighbors
-results = client.search(
-    collection_name="my_collection",
-    query_vector=[0.1, 0.2, 0.3, 0.4],
-    limit=3,
-)
-print(results)
-```
-
-### .NET Example
-
-Install the NuGet package:
+**Restore everything:**
 
 ```bash
-dotnet add package Qdrant.Client
+sudo systemctl stop qdrant.service
+sudo rm -rf /opt/qdrant/.local/share/qdrant-data
+sudo tar -xzf qdrant-backup-YYYY-MM-DD.tar.gz -C /opt/qdrant/.local/share
+sudo systemctl start qdrant.service
 ```
 
-```csharp
-using Qdrant.Client;
-using Qdrant.Client.Grpc;
-
-var client = new QdrantClient("127.0.0.1", 6334);
-
-// Create a collection
-await client.CreateCollectionAsync("my_collection", new VectorParams
-{
-    Size = 4,
-    Distance = Distance.Cosine,
-});
-
-// Insert vectors
-await client.UpsertAsync("my_collection", new[]
-{
-    new PointStruct
-    {
-        Id = 1,
-        Vectors = new[] { 0.1f, 0.2f, 0.3f, 0.4f },
-        Payload = { ["label"] = "first" },
-    },
-});
-
-// Search for nearest neighbors
-var results = await client.SearchAsync("my_collection",
-    new[] { 0.1f, 0.2f, 0.3f, 0.4f }, limit: 3);
-Console.WriteLine($"Found {results.Count} results");
-```
-
-### REST API Example (curl)
+**Snapshot one collection (service running):** snapshots are written to `snapshots/` inside the data directory.
 
 ```bash
-# Create a collection
-curl -X PUT http://127.0.0.1:6333/collections/my_collection \
-  -H "Content-Type: application/json" \
-  -d '{
-    "vectors": {
-      "size": 4,
-      "distance": "Cosine"
-    }
-  }'
+# Create a snapshot
+curl -X POST http://127.0.0.1:6333/collections/my_collection/snapshots
 
-# Insert vectors
-curl -X PUT http://127.0.0.1:6333/collections/my_collection/points \
-  -H "Content-Type: application/json" \
-  -d '{
-    "points": [
-      {"id": 1, "vector": [0.1, 0.2, 0.3, 0.4], "payload": {"label": "first"}},
-      {"id": 2, "vector": [0.5, 0.6, 0.7, 0.8], "payload": {"label": "second"}}
-    ]
-  }'
-
-# Search for nearest neighbors
-curl -X POST http://127.0.0.1:6333/collections/my_collection/points/search \
-  -H "Content-Type: application/json" \
-  -d '{
-    "vector": [0.1, 0.2, 0.3, 0.4],
-    "limit": 3
-  }'
+# List snapshots
+curl http://127.0.0.1:6333/collections/my_collection/snapshots
 ```
 
 ---
@@ -287,62 +317,109 @@ sudo systemctl status qdrant.service
 # Run the built-in health check
 sudo -u qdrant /opt/qdrant/qdrant.sh health
 
-# Test the REST API health endpoint directly
-curl -s http://127.0.0.1:6333/healthz
+# Check the container's own health status
+docker inspect --format '{{.State.Health.Status}}' qdrant
 
-# List all collections
-curl -s http://127.0.0.1:6333/collections
+# Test the REST API directly
+curl -s http://127.0.0.1:6333/healthz
+curl -s http://127.0.0.1:6333/
 
 # View container logs
 docker logs qdrant
 ```
 
-Expected: `{"title":"qdrant - vector search engine","version":"..."}` or `{}` from the health endpoint (both indicate the service is running).
+Expected:
+
+- The built-in check prints `Qdrant is healthy and accepting connections on port 6333 (REST) and 6334 (gRPC)`.
+- `docker inspect` prints `healthy`. The container's health check opens a TCP connection to port 6333, because the image does not include `curl`.
+- `/healthz` returns `healthz check passed`, and `/` returns JSON with the Qdrant version.
 
 ---
 
 ## Troubleshooting
 
-**Port already in use** — map to alternate host ports:
+### Service fails to start: port already in use
+
+**Cause:** Another process is listening on 6333 or 6334. The service uses host networking, so it cannot remap ports.
+
+**Fix:**
 
 ```bash
-docker run -d \
-  --name qdrant \
-  -p 6433:6333 \
-  -p 6434:6334 \
-  qdrant/qdrant:latest
+sudo ss -ltnp | grep -E ':633[34]\b'
 ```
 
-Update your client connection to use the new ports.
+### Connection refused
 
-**Connection refused:**
-- Verify the container is running: `docker ps`
-- Check port mappings: `docker port qdrant`
-- Ensure Docker is running: `sudo systemctl status docker`
-- Check container logs: `docker logs qdrant`
+**Cause:** The container is not running, or Docker is down.
 
-**Data persistence:**
-- Data is stored at `$HOME/.local/share/qdrant-data` (under the `qdrant` service user's home)
-- To back up collections, stop the service and copy that directory
-- To reset all data, stop the service, remove the directory, and restart
-
-**Snapshots:**
-Qdrant supports collection snapshots via the REST API:
+**Fix:**
 
 ```bash
-# Create a snapshot
-curl -X POST http://127.0.0.1:6333/collections/my_collection/snapshots
-
-# List snapshots
-curl http://127.0.0.1:6333/collections/my_collection/snapshots
+sudo systemctl status docker
+sudo systemctl status qdrant.service
+docker logs qdrant
 ```
+
+### Container reports `unhealthy` but the API works
+
+**Cause:** An older `qdrant.sh` is installed. Its health check called `curl`, which the Qdrant image does not include.
+
+**Fix:** Reinstall the current script and restart:
+
+```bash
+sudo ./install.sh
+sudo systemctl restart qdrant.service
+```
+
+### Python client raises `AttributeError: 'QdrantClient' object has no attribute 'search'`
+
+**Cause:** Recent `qdrant-client` releases replaced `search` with `query_points`.
+
+**Fix:** Use `query_points` as in [Usage Examples](#usage-examples).
+
+### Reset all data
+
+**Fix:**
+
+```bash
+sudo systemctl stop qdrant.service
+sudo rm -rf /opt/qdrant/.local/share/qdrant-data
+sudo systemctl start qdrant.service
+```
+
+---
+
+## Security Notes
+
+- This setup is for **local development only**.
+- No API key is set: anyone who can reach ports 6333 or 6334 can read and change every collection. To require a key, add `-e QDRANT__SERVICE__API_KEY=<key>` to the `docker run` command in `qdrant.sh` and reinstall.
+- With host networking, Qdrant listens on the host's interfaces. Block 6333 and 6334 at the firewall if the machine is on a shared network.
+
+---
+
+## Uninstall
+
+Run the uninstall script from this directory:
+
+```bash
+cd /path/to/Data/qdrant
+sudo ./uninstall.sh [--purge-data] [--remove-user]
+```
+
+| Option | Effect |
+|--------|--------|
+| *(none)* | Asks whether to delete the data directory |
+| `--purge-data` | Deletes the data directory without asking |
+| `--remove-user` | Also removes the `qdrant` user and disables lingering |
+
+The script always stops and disables the service, removes the container, the unit file, and `/opt/qdrant/qdrant.sh`. It removes `/opt/qdrant` only when data is purged.
 
 ---
 
 ## Additional Resources
 
-- [Qdrant GitHub Repository](https://github.com/qdrant/qdrant)
-- [Qdrant Documentation](https://qdrant.tech/documentation/)
-- [Qdrant REST API Reference](https://api.qdrant.tech/)
-- [Qdrant Python Client](https://github.com/qdrant/qdrant-client)
-- [Qdrant .NET Client](https://github.com/qdrant/qdrant-dotnet)
+- [Qdrant documentation](https://qdrant.tech/documentation/)
+- [Qdrant REST API reference](https://api.qdrant.tech/)
+- [Qdrant on GitHub](https://github.com/qdrant/qdrant)
+- [Python client](https://github.com/qdrant/qdrant-client)
+- [.NET client](https://github.com/qdrant/qdrant-dotnet)

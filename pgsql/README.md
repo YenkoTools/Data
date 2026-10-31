@@ -1,6 +1,6 @@
 # PostgreSQL
 
-PostgreSQL is a powerful open-source relational database. This setup runs a single PostgreSQL instance as a Docker container managed by a systemd service with persistent data storage and health checks.
+PostgreSQL is an open-source relational database. This directory runs a single PostgreSQL 18 instance in a Docker container, managed by systemd, with persistent data and health checks.
 
 ## Table of Contents
 
@@ -10,14 +10,15 @@ PostgreSQL is a powerful open-source relational database. This setup runs a sing
 4. [Installation](#installation)
 5. [Managing the Service](#managing-the-service)
 6. [Management Script Commands](#management-script-commands)
-7. [Running with Docker Compose](#running-with-docker-compose)
-8. [Connecting to PostgreSQL](#connecting-to-postgresql)
-9. [Example Runbook](#example-runbook)
-10. [Data Persistence](#data-persistence)
+7. [Connecting to PostgreSQL](#connecting-to-postgresql)
+8. [Usage Examples](#usage-examples)
+9. [Running Without systemd](#running-without-systemd)
+10. [Data Persistence and Backups](#data-persistence-and-backups)
 11. [Health Checks](#health-checks)
 12. [Troubleshooting](#troubleshooting)
 13. [Security Notes](#security-notes)
-14. [Additional Resources](#additional-resources)
+14. [Uninstall](#uninstall)
+15. [Additional Resources](#additional-resources)
 
 ---
 
@@ -25,63 +26,71 @@ PostgreSQL is a powerful open-source relational database. This setup runs a sing
 
 | Property | Value |
 |----------|-------|
-| Container image | `postgres:latest` |
+| Container image | `postgres:18` (pinned; see [Upgrading to a new major version](#upgrading-to-a-new-major-version)) |
 | Container name | `pgsql` |
 | Service user | `pgsql` |
+| systemd unit | `pgsql.service` |
+| Network mode | `host` |
 | Port | `5432` |
-| Database name | `default_database` |
-| Username | `admin` |
-| Password | `P@ssword92` |
-| Data path | `/home/pgsql/.local/share/pgsql-data` |
+| Database / user / password | `default_database` / `admin` / `P@ssword92` |
+| Data path | `/opt/pgsql/.local/share/pgsql-data` |
+| Upstream | <https://www.postgresql.org> |
 
 ---
 
 ## Prerequisites
 
-| Requirement | Details |
-|-------------|---------|
-| Docker | Container runtime |
-| Root / sudo | Required for installation and systemd setup |
-| Linux system | Tested on Debian / Ubuntu |
-| systemd | For service management |
+- Docker installed and running
+- Root or sudo access
+- Port 5432 free on the host
+- Optional: the `psql` client on the host (`sudo apt install postgresql-client`)
 
 ---
 
 ## Files
 
-| File | Description |
-|------|-------------|
-| `pgsql.sh` | Container management script (start/stop/status/health) |
-| `pgsql.service` | systemd service unit file |
-| `install.sh` | One-time installation script (requires root) |
-| `compose.yml` | Docker Compose alternative to systemd service |
-| `README.md` | This file |
+| File | Purpose | Installed to |
+|------|---------|--------------|
+| `pgsql.sh` | Container management script (`start`, `stop`, `status`, `health`) | `/opt/pgsql/pgsql.sh` |
+| `pgsql.service` | systemd unit file | `/etc/systemd/system/pgsql.service` |
+| `install.sh` | One-time installation script (requires root) | Not installed |
+| `compose.yml` | Docker Compose alternative to the systemd service | Not installed |
+| `docker-compose.yml` | Annotated Compose tutorial. Not used by the service, and it uses a different password | Not installed |
+| `README.md` | This document | Not installed |
 
 ---
 
 ## Installation
 
-Run the install script once to set up the service:
+1. Optional: change `POSTGRES_USER`, `POSTGRES_PASSWORD`, or `POSTGRES_DB` in `pgsql.sh`. PostgreSQL applies these only when it creates the data directory on first start.
 
-```bash
-cd /path/to/Data/pgsql
-sudo ./install.sh
-```
+2. Run the install script from this directory:
 
-**What the install script does:**
+   ```bash
+   cd /path/to/Data/pgsql
+   sudo ./install.sh
+   ```
 
-1. Creates a `pgsql` system user with home directory at `/opt/pgsql`
-2. Adds the `pgsql` user to the `docker` group
+3. Start the service for the first time:
+
+   ```bash
+   sudo systemctl start pgsql.service
+   ```
+
+4. Confirm it is healthy:
+
+   ```bash
+   sudo -u pgsql /opt/pgsql/pgsql.sh health
+   ```
+
+**What `install.sh` does:**
+
+1. Creates the `pgsql` system user with home directory `/opt/pgsql`
+2. Adds `pgsql` to the `docker` group
 3. Enables user lingering (`loginctl enable-linger pgsql`)
-4. Copies `pgsql.sh` to `/opt/pgsql/` with execute permissions
+4. Copies `pgsql.sh` to `/opt/pgsql/` and makes it executable
 5. Copies `pgsql.service` to `/etc/systemd/system/`
-6. Runs `systemctl daemon-reload` and enables the service to start on boot
-
-After installation, start the service manually for the first time:
-
-```bash
-sudo systemctl start pgsql.service
-```
+6. Reloads systemd and enables the service to start on boot
 
 ---
 
@@ -97,7 +106,7 @@ sudo systemctl stop pgsql.service
 # Check status
 sudo systemctl status pgsql.service
 
-# Enable auto-start on boot (done by install script)
+# Enable auto-start on boot (done by install.sh)
 sudo systemctl enable pgsql.service
 
 # Disable auto-start
@@ -106,7 +115,7 @@ sudo systemctl disable pgsql.service
 # View logs
 sudo journalctl -xeu pgsql.service
 
-# Follow real-time logs
+# Follow logs in real time
 sudo journalctl -fu pgsql.service
 ```
 
@@ -114,57 +123,22 @@ sudo journalctl -fu pgsql.service
 
 ## Management Script Commands
 
-The `pgsql.sh` script can also be called directly as the `pgsql` user:
+Run the management script directly as the service user:
 
 ```bash
-sudo -u pgsql /opt/pgsql/pgsql.sh start
-sudo -u pgsql /opt/pgsql/pgsql.sh stop
-sudo -u pgsql /opt/pgsql/pgsql.sh status
-sudo -u pgsql /opt/pgsql/pgsql.sh health
+sudo -u pgsql /opt/pgsql/pgsql.sh <command>
 ```
 
----
-
-## Running with Docker Compose
-
-As an alternative to the systemd service:
-
-```bash
-cd /path/to/Data/pgsql
-docker compose up -d
-```
-
-Stop and remove containers (data is preserved):
-
-```bash
-docker compose down
-```
-
-Stop and remove containers and volumes (data is deleted):
-
-```bash
-docker compose down -v
-```
+| Command | Action |
+|---------|--------|
+| `start` | Removes any existing `pgsql` container and starts a new one |
+| `stop` | Stops and removes the container |
+| `status` | Shows the container's state (`docker ps -a`) |
+| `health` | Confirms the container is running and `pg_isready` reports it is accepting connections |
 
 ---
 
 ## Connecting to PostgreSQL
-
-### From the Host Machine
-
-```bash
-psql -h localhost -p 5432 -U admin -d default_database
-```
-
-Enter the password `P@ssword92` when prompted.
-
-### From Inside the Container
-
-```bash
-docker exec -it pgsql psql -U admin -d default_database
-```
-
-### Connection Details
 
 | Field | Value |
 |-------|-------|
@@ -174,28 +148,40 @@ docker exec -it pgsql psql -U admin -d default_database
 | Username | `admin` |
 | Password | `P@ssword92` |
 
-### Connection Strings
+**Connection strings:**
 
-```
-# URI format
-postgresql://admin:P@ssword92@localhost:5432/default_database
+```text
+# URI (the @ in the password is URL-encoded as %40)
+postgresql://admin:P%40ssword92@localhost:5432/default_database
 
-# DSN format
+# libpq key/value
 host=localhost port=5432 dbname=default_database user=admin password=P@ssword92
 
-# .NET connection string
+# .NET (Npgsql)
 Host=localhost;Port=5432;Database=default_database;Username=admin;Password=P@ssword92
+```
+
+**From the host** (prompts for the password):
+
+```bash
+psql -h localhost -p 5432 -U admin -d default_database
+```
+
+**From inside the container** (no password needed):
+
+```bash
+docker exec -it pgsql psql -U admin -d default_database
 ```
 
 ---
 
-## Example Runbook
+## Usage Examples
+
+### SQL
 
 ```sql
--- Create a database
+-- Create a database and connect to it
 CREATE DATABASE myapp;
-
--- Connect to it
 \c myapp
 
 -- Create a table
@@ -206,43 +192,55 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Insert records
+-- Insert, query, update, delete
 INSERT INTO users (name, email) VALUES
     ('Alice Johnson', 'alice@example.com'),
     ('Bob Smith', 'bob@example.com');
-
--- Query records
 SELECT * FROM users;
-
--- Update a record
 UPDATE users SET name = 'Alice J. Johnson' WHERE id = 1;
-
--- Delete a record
 DELETE FROM users WHERE id = 2;
 ```
 
 ---
 
-## Data Persistence
+## Running Without systemd
 
-Database files are stored on the host at `/home/pgsql/.local/share/pgsql-data` and mounted into the container at `/var/lib/postgresql/data`.
-
-| Scenario | Data preserved? |
-|----------|----------------|
-| Container stopped | ✅ Yes |
-| Container removed | ✅ Yes |
-| System reboot | ✅ Yes |
-
-**Backup:**
+`compose.yml` runs the same image and credentials with Docker Compose. It publishes port 5432 and stores data in `./db-data` next to the file.
 
 ```bash
-docker exec pgsql pg_dump -U admin default_database > backup.sql
+cd /path/to/Data/pgsql
+
+# Start
+docker compose up -d
+
+# Stop and remove the container (data in ./db-data is kept)
+docker compose down
+```
+
+Don't run Compose and the systemd service at the same time: both use the container name `pgsql` and port 5432.
+
+---
+
+## Data Persistence and Backups
+
+Data is stored on the host at `/opt/pgsql/.local/share/pgsql-data`, mounted into the container at `/var/lib/postgresql`. PostgreSQL 18 keeps its cluster in a version-named subdirectory, so the files are in `pgsql-data/18/docker`. Data survives container restarts and re-creation.
+
+**Back up one database (service running):**
+
+```bash
+docker exec pgsql pg_dump -U admin -d default_database > default_database-$(date +%F).sql
+```
+
+**Back up every database and role:**
+
+```bash
+docker exec pgsql pg_dumpall -U admin > pgsql-all-$(date +%F).sql
 ```
 
 **Restore:**
 
 ```bash
-docker exec -i pgsql psql -U admin default_database < backup.sql
+docker exec -i pgsql psql -U admin -d default_database < default_database-YYYY-MM-DD.sql
 ```
 
 ---
@@ -256,68 +254,113 @@ sudo systemctl status pgsql.service
 # Run the built-in health check
 sudo -u pgsql /opt/pgsql/pgsql.sh health
 
-# Check if PostgreSQL is accepting connections
+# Check the container's own health status
+docker inspect --format '{{.State.Health.Status}}' pgsql
+
+# Check that PostgreSQL accepts connections
 docker exec pgsql pg_isready -U admin
 
 # View container logs
 docker logs pgsql
 ```
 
-Expected output from `pg_isready`: `localhost:5432 - accepting connections`
+Expected:
+
+- The built-in check prints `PostgreSQL is healthy and accepting connections on port 5432`.
+- `docker inspect` prints `healthy`.
+- `pg_isready` prints `/var/run/postgresql:5432 - accepting connections`.
 
 ---
 
 ## Troubleshooting
 
-**Check Docker is installed and running:**
+### Container exits: "there appears to be PostgreSQL data in /var/lib/postgresql/data"
+
+**Cause:** The PostgreSQL 18 image refuses to start when something is mounted at `/var/lib/postgresql/data`, the location older versions used. This happens with an older copy of `pgsql.sh` installed, or a data directory created by PostgreSQL 17 or earlier.
+
+**Fix:** Reinstall the current `pgsql.sh`, which mounts at `/var/lib/postgresql`. If the data directory holds an older cluster, follow [Upgrading to a new major version](#upgrading-to-a-new-major-version).
 
 ```bash
-docker --version
-sudo systemctl status docker
+sudo ./install.sh
+sudo systemctl restart pgsql.service
 ```
 
-**Verify the pgsql user has Docker group access:**
+### Upgrading to a new major version
+
+**Cause:** PostgreSQL major versions cannot read each other's data directories, so the image is pinned.
+
+**Fix:** Dump, switch versions, then restore into a fresh data directory:
 
 ```bash
-groups pgsql
-```
-
-**Container fails to start:**
-- View service logs: `sudo journalctl -xeu pgsql.service`
-- View container logs: `docker logs pgsql`
-- Ensure port 5432 is free: `sudo lsof -i :5432`
-
-**Data directory permissions error:**
-
-```bash
-sudo chown -R pgsql:pgsql /home/pgsql/.local/share/pgsql-data
-```
-
-**Reset everything and start fresh:**
-
-```bash
+docker exec pgsql pg_dumpall -U admin > pgsql-all.sql
 sudo systemctl stop pgsql.service
-sudo systemctl disable pgsql.service
-docker rm -f pgsql
-sudo rm -rf /home/pgsql/.local/share/pgsql-data
+sudo mv /opt/pgsql/.local/share/pgsql-data /opt/pgsql/.local/share/pgsql-data.old
+# edit IMAGE in pgsql.sh, then:
 sudo ./install.sh
 sudo systemctl start pgsql.service
+docker exec -i pgsql psql -U admin -d default_database < pgsql-all.sql
+```
+
+### Password authentication failed
+
+**Cause:** The credentials in `pgsql.sh` were changed after the data directory was created. PostgreSQL keeps the originals.
+
+**Fix:** Use the original password, or change it in the database:
+
+```bash
+docker exec -it pgsql psql -U admin -d default_database -c "ALTER USER admin PASSWORD 'new_password';"
+```
+
+### Service fails to start: port 5432 already in use
+
+**Cause:** Another PostgreSQL, such as a host install or the Compose setup, is listening on 5432. Gitea's database does not publish a port, so it never conflicts.
+
+**Fix:**
+
+```bash
+sudo ss -ltnp | grep ':5432\b'
+docker ps --filter publish=5432
+```
+
+### `permission denied` when the script calls Docker
+
+**Cause:** The `pgsql` user is not in the `docker` group.
+
+**Fix:**
+
+```bash
+groups pgsql                     # should list docker
+sudo usermod -aG docker pgsql
+sudo systemctl restart pgsql.service
 ```
 
 ---
 
 ## Security Notes
 
-> ⚠️ **Warning:** The default password (`P@ssword92`) is hardcoded in the scripts. Before using in any shared or production-like environment:
+- This setup is for **local development only**.
+- The default password `P@ssword92` is hardcoded in `pgsql.sh` and `compose.yml`. Change it before first start on any shared machine.
+- With host networking, PostgreSQL listens on the host's interfaces. Block port 5432 at the firewall if the machine is on a shared network.
 
-1. Change the password in `pgsql.sh` before installation.
-2. Use environment variables or a secrets manager instead of hardcoded credentials.
-3. Restrict network access to port `5432`.
+---
+
+## Uninstall
+
+There is no `uninstall.sh` for PostgreSQL. Remove it manually:
+
+```bash
+sudo systemctl disable --now pgsql.service
+sudo rm /etc/systemd/system/pgsql.service
+sudo systemctl daemon-reload
+docker rm -f pgsql
+sudo loginctl disable-linger pgsql
+sudo userdel -r pgsql   # also deletes /opt/pgsql and all databases
+```
 
 ---
 
 ## Additional Resources
 
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Docker Hub – postgres](https://hub.docker.com/_/postgres)
-- [pgAdmin Documentation](https://www.pgadmin.org/docs/)
+- [PostgreSQL documentation](https://www.postgresql.org/docs/)
+- [postgres image on Docker Hub](https://hub.docker.com/_/postgres)
+- [PostgreSQL 18 image data directory change](https://github.com/docker-library/postgres/pull/1259)

@@ -70,7 +70,7 @@ When adding a new service to this repository, use the `azurite/` directory as th
 - **`install.sh`**: root check, dedicated user creation, docker group membership, linger enablement, file copy to `/opt/service-name/`, systemd enable
 - **`service-name.sh`**: `CONTAINER_NAME`/`IMAGE`/port/`DATA_PATH` variables at the top, `start`/`stop`/`status`/`health` functions, embedded Docker `--health-cmd`
 - **`service-name.service`**: `Type=oneshot`, `RemainAfterExit=true`, `After=network-online.target docker.service`, `Requires=docker.service`
-- **`README.md`**: Overview table, Prerequisites, Files Overview, Installation, Managing the Service, Accessing the Service, Health Checks, Troubleshooting sections
+- **`README.md`**: start from `docs/README-template-service.md` (see Documentation Standards)
 
 ## Services Overview
 
@@ -111,7 +111,8 @@ RESTful API mock server — multiple instances on ports 3010, 3011, 3012
 
 ### pgsql/
 PostgreSQL database
-- Image: `postgres:latest`
+- Image: `postgres:18` (pinned: major version upgrades require a data migration)
+- Data mounted at `/var/lib/postgresql` (PostgreSQL 18+ layout; the cluster lives in `18/docker`), not `/var/lib/postgresql/data`
 - Port 5432; default credentials: user `admin`, database `default_database`
 - Uses standard systemd/install.sh pattern with `pgsql.sh`
 - `compose.yml` also available as a Docker Compose alternative
@@ -121,6 +122,8 @@ High-performance vector database and similarity search engine
 - Image: `qdrant/qdrant:latest`
 - REST API port 6333, gRPC port 6334
 - Web UI at `http://127.0.0.1:6333/dashboard`
+- The image has no `curl`, so the Docker `--health-cmd` uses a bash TCP probe (`:> /dev/tcp/127.0.0.1/6333`)
+- `uninstall.sh` follows the Gitea pattern: data under `/opt/qdrant/.local/share` is kept unless purged
 
 ### seq/
 Datalust SEQ structured logging server
@@ -139,11 +142,16 @@ SQL Server 2025 container
 ### valkey/
 Valkey (Redis-compatible) in-memory data store
 - Image: `docker.io/valkey/valkey:latest`
-- Port 6379
-- **Non-standard setup**: uses **podman** instead of Docker; runs as user `jim` (no dedicated service user or `install.sh`)
-- Script: `valkey-ultra3.sh` (does not follow the standard `service-name.sh` naming convention)
-- `valkey.service` runs directly as `User=jim` with `After=network.target` (no Docker dependency)
-- Password-authenticated; config at `/home/jim/.valkey-ultra3/valkey.conf`, data at `/home/jim/.valkey-ultra3/valkey-data`
+- Port 6379, host network; container name `valkey`, service user `valkey`
+- Standard pattern: `install.sh`, `uninstall.sh`, `valkey.sh`, `valkey.service`
+- Password (`PASSWORD` in `valkey.sh`) and `--appendonly yes` are passed as `valkey-server` arguments; there is no config file
+- Data path: `/opt/valkey/.local/share/valkey-data`
+- Replaced an earlier Podman setup (`valkey-ultra3.sh`, user `jim`); the README has migration steps
+
+### pwsh/ and terraform/
+Tool installers, not services: each has only `install.sh` (run as a normal user; it calls `sudo`) and `README.md`
+- `pwsh/install.sh`: Microsoft apt repo for Debian 13, installs `powershell`, then starts `pwsh`
+- `terraform/install.sh`: HashiCorp apt repo, using `DEBIAN_CODENAME` from `/etc/os-release` because LMDE's own codename is unknown to the repo
 
 ## Conventions
 
@@ -165,9 +173,11 @@ Valkey (Redis-compatible) in-memory data store
 - Containers removed before starting to ensure clean state (`docker rm -f`)
 
 ### Health Checks
-- HTTP services use `curl` to test endpoints
+- HTTP services use `curl` to test endpoints from the host in the `health` function
+- Docker `--health-cmd` runs inside the image: confirm the tool exists there (e.g. Qdrant has no `curl`)
 - Health check functions return 0 for healthy, 1 for unhealthy
 - Health checks verify both container running and endpoint responsiveness
+- Use `docker exec` without `-it` in scripts so they work without a TTY
 
 ## Version Management
 
@@ -177,8 +187,14 @@ Valkey (Redis-compatible) in-memory data store
 
 ## Documentation Standards
 
-Each service directory must have:
-- README.md with Prerequisites, Files Overview, Installation, Usage, and Troubleshooting sections
-- Clear distinction between installation (one-time) and usage (ongoing) commands
-- Examples of systemd commands (start, stop, status, journalctl)
-- Port numbers and access URLs prominently displayed
+Every component directory has a `README.md` built from a template in `docs/`:
+
+- **Container services**: `docs/README-template-service.md` (Template A). Sections, in order: Overview, Prerequisites, Files, Installation, Managing the Service, Management Script Commands, Connecting to <Service>, Usage Examples (optional), service-specific sections (optional), Running Without systemd (optional), Data Persistence and Backups, Health Checks, Troubleshooting, Security Notes, Uninstall, Additional Resources
+- **Tool installers**: `docs/README-template-tool.md` (Template B). Sections: Overview, Prerequisites, Files, Installation, Verifying the Installation, Upgrading, Uninstall, Troubleshooting, Additional Resources
+
+Rules:
+- Every value (ports, paths, users, images, credentials) must match the scripts. The service user's home is `/opt/<service>`, so data paths are `/opt/<service>/.local/share/<service>-data`
+- Troubleshooting entries use one H3 per symptom, with **Cause:** and **Fix:**
+- Health Checks state the expected output
+- Don't use relative links to other directories; the README is also published as a wiki page
+- Copy each finished README to its `wiki/` page (e.g. `pgsql/README.md` → `wiki/PostgreSQL.md`) and add new pages to `wiki/Home.md` and the root `README.md`

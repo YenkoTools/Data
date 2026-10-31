@@ -1,7 +1,7 @@
 #!/bin/bash
 
 CONTAINER_NAME="pgsql"
-IMAGE="postgres:latest"
+IMAGE="postgres:18"   # pinned: major version upgrades require a data migration
 PORT=5432
 POSTGRES_USER="admin"
 POSTGRES_PASSWORD="P@ssword92"
@@ -25,7 +25,7 @@ start_container() {
         -e "POSTGRES_USER=$POSTGRES_USER" \
         -e "POSTGRES_PASSWORD=$POSTGRES_PASSWORD" \
         -e "POSTGRES_DB=$POSTGRES_DB" \
-        -v "$DATA_PATH:/var/lib/postgresql/data" \
+        -v "$DATA_PATH:/var/lib/postgresql" \
         --health-cmd "pg_isready -U $POSTGRES_USER || exit 1" \
         --health-interval 30s \
         --health-timeout 5s \

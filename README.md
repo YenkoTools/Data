@@ -74,7 +74,7 @@ Resource: https://github.com/typicode/json-server
 Management scripts to run PostgreSQL as a systemd-managed Docker container.
 
 - Systemd service integration with auto-start on boot
-- Single instance configuration on port 5432
+- Single PostgreSQL 18 instance on port 5432 (image version pinned)
 - Persistent data storage
 - Health check monitoring
 - Installation and management scripts
@@ -91,7 +91,7 @@ Management scripts to run the Datalust SEQ logging server for centralized struct
 - Docker Compose configuration
 - Management scripts for container lifecycle
 
-See [seq/readme.md](seq/readme.md) for deployment details.
+See [seq/README.md](seq/README.md) for deployment details.
 
 Resource: https://datalust.co/
 
@@ -99,7 +99,7 @@ Resource: https://datalust.co/
 Management scripts to run Microsoft SQL Server as a systemd service.
 
 - Systemd service integration with auto-start on boot
-- SQL Server 2022 container image
+- SQL Server 2025 container image
 - Automated installation script
 - Database initialization scripts (ACME DB)
 - Health check monitoring
@@ -109,11 +109,39 @@ See [sqlserver/README.md](sqlserver/README.md) for installation and usage.
 Resource: https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker
 
 ### valkey/
-Management scripts to run the Open Source Redis cache (Valkey).
+Management scripts to run Valkey, the open-source Redis-compatible in-memory data store, as a systemd service.
 
-- Systemd service integration
-- High-performance in-memory data store
-- Redis-compatible API
+- Systemd service integration with auto-start on boot
+- Port 6379, password-protected, with append-only file (AOF) persistence
+- Installation, uninstall, and management scripts
+- Migration steps from the earlier Podman-based setup
+
+See [valkey/README.md](valkey/README.md) for setup and usage.
+
+Resource: https://valkey.io
+
+## Developer Tools
+
+These directories install command-line tools on the host with apt. They are not services.
+
+### pwsh/
+Installs PowerShell 7 from Microsoft's apt repository (Debian 13 / LMDE 7).
+
+See [pwsh/README.md](pwsh/README.md).
+
+### terraform/
+Installs the Terraform CLI from HashiCorp's apt repository, mapping LMDE's codename to the Debian codename.
+
+See [terraform/README.md](terraform/README.md).
+
+## Documentation Templates
+
+Every component README follows one of two templates in [docs/](docs/):
+
+- [README-template-service.md](docs/README-template-service.md) for container services
+- [README-template-tool.md](docs/README-template-tool.md) for tool installers
+
+Each README is mirrored to a page in [wiki/](wiki/), which is published to the GitHub wiki on pushes to `main`.
 
 ---
 

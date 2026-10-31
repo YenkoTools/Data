@@ -7,17 +7,17 @@ PASSWORD="P@ssword92"  # Replace with your SQL Server password inside the contai
 
 # Path to the SQL script file (needs to be accessible within the container,
 # or we'll pass it as a command)
-SQL_SCRIPT="/tmp/setup-acmedb-database.sql" # Assuming you'll copy it into the container
+SQL_SCRIPT="/tmp/setup-acmedb.sql" # Assuming you'll copy it into the container
 
 # Copy the SQL script into the container and then execute
 echo "Copying SQL script to the container..."
-docker cp setup-acmedb-database.sql "$CONTAINER_NAME:$SQL_SCRIPT"
+docker cp setup-acmedb.sql "$CONTAINER_NAME:$SQL_SCRIPT"
 
 # Construct the sqlcmd command to run inside the container
 SQLCMD_COMMAND="/opt/mssql-tools18/bin/sqlcmd -S localhost -U '$USERNAME' -P '$PASSWORD' -N -C -i '$SQL_SCRIPT'"
 
 echo "Executing SQL script inside the container..."
-docker exec -it "$CONTAINER_NAME" bash -c "$SQLCMD_COMMAND"
+docker exec "$CONTAINER_NAME" bash -c "$SQLCMD_COMMAND"
 
 # Get the exit code from the last executed command inside the container
 EXIT_CODE=$?
