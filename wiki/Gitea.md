@@ -2,7 +2,7 @@
 
 Gitea is a lightweight, self-hosted Git service with a web UI, issue tracking, pull requests, and CI/CD pipelines. It is compatible with GitHub workflows and runs entirely on your local infrastructure.
 
-The service runs three containers: Gitea, a dedicated PostgreSQL database (`gitea-db`), and a Gitea Actions runner (`gitea-runner`). All three are started and stopped together by `gitea.sh` and communicate over a private Docker network.
+The service runs three containers: Gitea, a dedicated PostgreSQL database (`gitea-db`), and a Gitea Actions runner (`gitea-runner`). All three are started and stopped together by `gitea.sh`. Gitea and the database communicate over a private Docker network; the runner uses the host network.
 
 ## Table of Contents
 
@@ -255,9 +255,9 @@ The runner then shows up under **Site Administration → Actions → Runners**.
 
 ### How jobs run
 
-- The runner reaches Gitea at `http://gitea:3000` over `gitea-network`.
+- The runner uses the host network and registers with Gitea at `http://localhost:3001`. act_runner passes this address to jobs as the server URL, so it must be reachable from job containers too.
 - Jobs run in sibling containers that the runner starts through the host Docker socket (`/var/run/docker.sock`).
-- Job containers use the host network (`container.network: host`), so `actions/checkout` can reach Gitea at its Site URL, `http://localhost:3001`.
+- Job containers also use the host network (`container.network: host`), so `actions/checkout` reaches Gitea at `http://localhost:3001`, which matches the Site URL (`ROOT_URL`).
 - The runner container runs as the `gitea` user and gets the Docker socket's group, so runner files stay owned by `gitea`.
 
 **Security note:** access to the Docker socket is equivalent to root on the host. Any workflow that runs on this runner can control the host's Docker daemon. Only run workflows from repositories you trust.
@@ -348,7 +348,7 @@ Check the runner log, and confirm the workflow's `runs-on` matches one of the ru
 ```bash
 docker logs gitea-runner
 ```
-If the log shows a registration error, delete `.runner` and restart (see [Customizing the runner](#customizing-the-runner)). If `actions/checkout` cannot connect, make sure the Site URL (`ROOT_URL` in `app.ini`) is `http://localhost:3001`.
+If the log shows a registration error, delete `.runner` and restart (see [Customizing the runner](#customizing-the-runner)). If `actions/checkout` cannot connect, make sure the Site URL (`ROOT_URL` in `app.ini`) is `http://localhost:3001` and that `address` in `.runner` is the same URL.
 
 **SSH clone failing on port 2222**
 Confirm the container is running and port 2222 is bound:

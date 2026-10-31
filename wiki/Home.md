@@ -13,6 +13,7 @@ Welcome to the **Data Tools** wiki. This project provides management scripts and
 | [Gitea](Gitea) | Self-hosted Git service with web UI, issues, pull requests, and Actions (with dedicated PostgreSQL) | 3001, 2222 |
 | [JSON Server](JSON-Server) | Fake REST API server for testing and prototyping | 3010, 3011, 3012 |
 | [PostgreSQL](PostgreSQL) | PostgreSQL database as a systemd-managed Docker container | 5432 |
+| [Qdrant](Qdrant) | High-performance vector database and similarity search engine | 6333, 6334 |
 | [SEQ](SEQ) | Datalust SEQ structured log server | 5341, 8081 |
 | [SQL Server](SQL-Server) | Microsoft SQL Server 2025 as a systemd service | 1433 |
 | [Valkey](Valkey) | Valkey open-source Redis-compatible cache | 6379 |
