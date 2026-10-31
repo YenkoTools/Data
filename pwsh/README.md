@@ -1,6 +1,6 @@
 # PowerShell
 
-PowerShell 7 is Microsoft's cross-platform shell and scripting language. This directory installs it on the Linux host from Microsoft's apt repository, so repository scripts such as `git-tag.ps1` can run with `pwsh`.
+PowerShell 7 is Microsoft's cross-platform shell and scripting language. This directory installs it on the Linux host from Microsoft's apt repository.
 
 ## Table of Contents
 

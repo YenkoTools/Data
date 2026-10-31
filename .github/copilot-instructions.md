@@ -181,7 +181,7 @@ Tool installers, not services: each has only `install.sh` (run as a normal user;
 
 ## Version Management
 
-- Uses PowerShell script `git-tag.ps1` for annotated Git tags
+- Releases use annotated Git tags (`git tag -a vX.Y.Z -m "vX.Y.Z"`, then `git push origin vX.Y.Z`)
 - Follows Semantic Versioning (MAJOR.MINOR.PATCH)
 - CHANGELOG.md follows Keep a Changelog format
 

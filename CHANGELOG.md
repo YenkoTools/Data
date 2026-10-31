@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- `git-tag.ps1`: tag releases with `git tag -a` and `git push origin <tag>` directly
+
 ## [1.1.0] - 2026-10-31
 
 ### Added
