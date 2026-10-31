@@ -21,7 +21,7 @@ start_container() {
         --network host \
         --restart=unless-stopped \
         -v "$DATA_PATH:/qdrant/storage" \
-        --health-cmd "curl -sf http://127.0.0.1:${PORT_REST}/healthz || exit 1" \
+        --health-cmd "bash -c ':> /dev/tcp/127.0.0.1/${PORT_REST}' || exit 1" \
         --health-interval 30s \
         --health-timeout 5s \
         --health-retries 3 \

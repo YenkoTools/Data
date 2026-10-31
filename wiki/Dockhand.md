@@ -1,19 +1,22 @@
 # Dockhand
 
-Dockhand is a modern, open-source Docker management UI providing real-time container management, Compose stack orchestration, and multi-environment support in a lightweight, privacy-focused package.
+Dockhand is an open-source web UI for managing Docker. It provides real-time container management, Compose stack orchestration, and support for multiple Docker hosts.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
-3. [Installation](#installation)
-4. [Managing the Service](#managing-the-service)
-5. [Management Script Commands](#management-script-commands)
-6. [Accessing Dockhand](#accessing-dockhand)
-7. [First-Time Setup](#first-time-setup)
-8. [Health Checks](#health-checks)
-9. [Troubleshooting](#troubleshooting)
-10. [Additional Resources](#additional-resources)
+3. [Files](#files)
+4. [Installation](#installation)
+5. [Managing the Service](#managing-the-service)
+6. [Management Script Commands](#management-script-commands)
+7. [Connecting to Dockhand](#connecting-to-dockhand)
+8. [Data Persistence and Backups](#data-persistence-and-backups)
+9. [Health Checks](#health-checks)
+10. [Troubleshooting](#troubleshooting)
+11. [Security Notes](#security-notes)
+12. [Uninstall](#uninstall)
+13. [Additional Resources](#additional-resources)
 
 ---
 
@@ -24,41 +27,64 @@ Dockhand is a modern, open-source Docker management UI providing real-time conta
 | Container image | `fnsys/dockhand:latest` |
 | Container name | `dockhand` |
 | Service user | `dockhand` |
+| systemd unit | `dockhand.service` |
+| Network mode | `host` |
 | Web UI | `http://localhost:3000` |
-| Data directory | `/opt/dockhand` |
+| Data path | `/opt/dockhand` (mounted at the same path inside the container) |
+| Upstream | <https://dockhand.pro> |
 
 ---
 
 ## Prerequisites
 
-- Docker installed and running on your system
-- Root / sudo access (for systemd installation)
+- Docker installed and running
+- Root or sudo access
+- Port 3000 free on the host
+
+---
+
+## Files
+
+| File | Purpose | Installed to |
+|------|---------|--------------|
+| `dockhand.sh` | Container management script (`start`, `stop`, `status`, `health`) | `/opt/dockhand/dockhand.sh` |
+| `dockhand.service` | systemd unit file | `/etc/systemd/system/dockhand.service` |
+| `install.sh` | One-time installation script (requires root) | Not installed |
+| `README.md` | This document | Not installed |
 
 ---
 
 ## Installation
 
-Run the install script once from the `dockhand/` directory:
+1. Run the install script from this directory:
 
-```bash
-cd /path/to/Data/dockhand
-sudo ./install.sh
-```
+   ```bash
+   cd /path/to/Data/dockhand
+   sudo ./install.sh
+   ```
 
-**What the install script does:**
+2. Start the service for the first time:
 
-1. Creates a `dockhand` system user with home directory at `/opt/dockhand`
-2. Adds the `dockhand` user to the `docker` group
+   ```bash
+   sudo systemctl start dockhand.service
+   ```
+
+3. Confirm it is healthy:
+
+   ```bash
+   sudo -u dockhand /opt/dockhand/dockhand.sh health
+   ```
+
+4. Open `http://localhost:3000` and enable authentication (see [Connecting to Dockhand](#connecting-to-dockhand)).
+
+**What `install.sh` does:**
+
+1. Creates the `dockhand` system user with home directory `/opt/dockhand`
+2. Adds `dockhand` to the `docker` group
 3. Enables user lingering (`loginctl enable-linger dockhand`)
-4. Copies `dockhand.sh` to `/opt/dockhand/` with execute permissions
+4. Copies `dockhand.sh` to `/opt/dockhand/` and makes it executable
 5. Copies `dockhand.service` to `/etc/systemd/system/`
-6. Runs `systemctl daemon-reload` and enables the service to start on boot
-
-After installation, start the service manually for the first time:
-
-```bash
-sudo systemctl start dockhand.service
-```
+6. Reloads systemd and enables the service to start on boot
 
 ---
 
@@ -74,7 +100,7 @@ sudo systemctl stop dockhand.service
 # Check status
 sudo systemctl status dockhand.service
 
-# Enable auto-start on boot (done by install script)
+# Enable auto-start on boot (done by install.sh)
 sudo systemctl enable dockhand.service
 
 # Disable auto-start
@@ -91,88 +117,154 @@ sudo journalctl -fu dockhand.service
 
 ## Management Script Commands
 
-The `dockhand.sh` script can also be called directly:
+Run the management script directly as the service user:
 
 ```bash
-sudo -u dockhand /opt/dockhand/dockhand.sh start
-sudo -u dockhand /opt/dockhand/dockhand.sh stop
-sudo -u dockhand /opt/dockhand/dockhand.sh status
-sudo -u dockhand /opt/dockhand/dockhand.sh health
+sudo -u dockhand /opt/dockhand/dockhand.sh <command>
 ```
 
+| Command | Action |
+|---------|--------|
+| `start` | Removes any existing `dockhand` container and starts a new one |
+| `stop` | Stops and removes the container |
+| `status` | Shows the container's state (`docker ps -a`) |
+| `health` | Confirms the container is running and the web UI on port 3000 responds |
+
 ---
 
-## Accessing Dockhand
+## Connecting to Dockhand
 
-| Interface | URL |
-|-----------|-----|
-| Web UI | http://localhost:3000 |
+| Field | Value |
+|-------|-------|
+| URL | `http://localhost:3000` |
+| Authentication | Disabled on first launch |
+| Docker host | The local daemon, through the mounted `/var/run/docker.sock` |
+
+**First-time setup:** go to **Settings → Authentication**, enable authentication, and create the first admin user.
+
+**Compose stacks with relative paths:** Dockhand's data directory is mounted at the same path inside and outside the container (`/opt/dockhand:/opt/dockhand`, with `DATA_DIR=/opt/dockhand`). This lets relative volume paths in stacks resolve to real paths on the host.
 
 ---
 
-## First-Time Setup
+## Data Persistence and Backups
 
-On first launch, authentication is **disabled**. Navigate to **Settings → Authentication** to enable it and create your first admin user.
+Data (settings, users, and stack files) is stored on the host at `/opt/dockhand`, which is also the service user's home directory and holds `dockhand.sh`. It survives container restarts and re-creation.
 
-Dockhand automatically configures a local Docker environment on startup. To manage additional Docker hosts, go to **Settings → Environments**.
+**Back up:**
+
+```bash
+sudo systemctl stop dockhand.service
+sudo tar -czf dockhand-backup-$(date +%F).tar.gz -C /opt dockhand
+sudo systemctl start dockhand.service
+```
+
+**Restore:**
+
+```bash
+sudo systemctl stop dockhand.service
+sudo rm -rf /opt/dockhand
+sudo tar -xzf dockhand-backup-YYYY-MM-DD.tar.gz -C /opt
+sudo systemctl start dockhand.service
+```
 
 ---
 
 ## Health Checks
 
 ```bash
+# Check service status
+sudo systemctl status dockhand.service
+
+# Run the built-in health check
 sudo -u dockhand /opt/dockhand/dockhand.sh health
+
+# Check the container's own health status (health check defined by the image)
+docker inspect --format '{{.State.Health.Status}}' dockhand
+
+# Test the web UI directly
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000
+
+# View container logs
+docker logs dockhand
 ```
 
-The health check verifies the container is running and the web UI responds on port 3000.
+Expected:
+
+- The built-in check prints `Dockhand is healthy and accessible at http://localhost:3000`.
+- `docker inspect` prints `healthy`.
+- `curl` prints `200`.
 
 ---
 
 ## Troubleshooting
 
-**Container fails to start — Docker socket permission denied**
+### Container fails to start: Docker socket permission denied
 
-The `dockhand` user must be in the `docker` group:
+**Cause:** The `dockhand` user is not in the `docker` group.
+
+**Fix:**
 
 ```bash
-groups dockhand
+groups dockhand                  # should list docker
 sudo usermod -aG docker dockhand
 sudo systemctl restart dockhand.service
 ```
 
-**Web UI not accessible after start**
+### Web UI not reachable after start
 
-Check container logs and verify port 3000 is free:
+**Cause:** The container exited, or another process holds port 3000. Gitea in this repo uses port 3001 to avoid this conflict.
+
+**Fix:**
 
 ```bash
 docker logs dockhand
-ss -tlnp | grep 3000
+sudo ss -ltnp | grep ':3000\b'
 ```
 
-**Relative volume paths in stacks mounted as empty directories**
+### Relative volume paths in stacks mount as empty directories
 
-Dockhand is configured with matching paths (`-v /opt/dockhand:/opt/dockhand` and `DATA_DIR=/opt/dockhand`). This ensures Docker Compose can resolve relative bind-mount paths on the host filesystem. See the [Dockhand data storage docs](https://dockhand.pro/manual/#data-storage) for details.
+**Cause:** The data directory is not mounted at the same path inside and outside the container.
 
-**Locked out of the UI**
-
-Use the emergency scripts inside the container to recover access:
+**Fix:** Confirm the mount and `DATA_DIR` match:
 
 ```bash
-# Disable authentication entirely
-docker exec -it dockhand /app/scripts/disable-auth.sh
-
-# Or create a default admin user (admin / admin123)
-docker exec -it dockhand /app/scripts/create-admin.sh
-
-# Or reset a specific user's password
-docker exec -it dockhand /app/scripts/reset-password.sh username NewPassword123
+docker inspect --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{"\n"}}{{end}}' dockhand
+docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' dockhand | grep DATA_DIR
 ```
+
+Both should show `/opt/dockhand`. See the [Dockhand data storage documentation](https://dockhand.pro/manual/#data-storage).
+
+---
+
+## Security Notes
+
+- This setup is for **local development only**.
+- Authentication is **off** until you enable it. Until then, anyone who can reach port 3000 has full control of Docker.
+- The container mounts `/var/run/docker.sock`, which is equivalent to root access on the host. Treat Dockhand logins as root credentials.
+- With host networking, Dockhand listens on the host's interfaces. Block port 3000 at the firewall if the machine is on a shared network.
+
+---
+
+## Uninstall
+
+There is no `uninstall.sh` for Dockhand. Remove it manually:
+
+```bash
+sudo systemctl disable --now dockhand.service
+sudo rm /etc/systemd/system/dockhand.service
+sudo systemctl daemon-reload
+docker rm -f dockhand
+sudo loginctl disable-linger dockhand
+sudo userdel -r dockhand   # also deletes /opt/dockhand and all stored data
+```
+
+Containers and stacks that Dockhand created keep running; remove them separately if needed.
 
 ---
 
 ## Additional Resources
 
-- Website: https://dockhand.pro
-- Manual: https://dockhand.pro/manual
-- GitHub: https://github.com/Finsys/dockhand
-- Docker Hub: https://hub.docker.com/r/fnsys/dockhand
+- [Dockhand website](https://dockhand.pro)
+- [Dockhand manual](https://dockhand.pro/manual)
+- [Dockhand on GitHub](https://github.com/Finsys/dockhand)
+- [Dockhand on Docker Hub](https://hub.docker.com/r/fnsys/dockhand)

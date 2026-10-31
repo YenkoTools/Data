@@ -1,17 +1,20 @@
 [Unit]
-Description=Valkey (Redis-compatible) Container Service
-After=network.target
-Requires=network.target
+Description=Valkey (Redis-compatible) Container
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/home/jim/.valkey-ultra3/valkey-ultra3.sh start
-ExecStop=/home/jim/.valkey-ultra3/valkey-ultra3.sh stop
-RemainAfterExit=yes
-StandardOutput=journal
-StandardError=journal
-User=jim
+ExecStart=/opt/valkey/valkey.sh start
+ExecStop=/opt/valkey/valkey.sh stop
+ExecReload=/opt/valkey/valkey.sh status
+RemainAfterExit=true
+User=valkey
+Group=valkey
+TimeoutStartSec=60
+TimeoutStopSec=30
+Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-

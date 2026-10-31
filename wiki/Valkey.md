@@ -1,21 +1,25 @@
 # Valkey
 
-Valkey is an open-source, Redis-compatible in-memory data store. It is a drop-in replacement for Redis and is ideal for caching, session storage, and pub/sub messaging.
+Valkey is an open-source, Redis-compatible in-memory data store. It works as a drop-in replacement for Redis for caching, session storage, queues, and pub/sub messaging.
 
 ## Table of Contents
 
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
-3. [Installation](#installation)
-4. [Managing the Service](#managing-the-service)
-5. [Management Script Commands](#management-script-commands)
-6. [Connecting to Valkey](#connecting-to-valkey)
-7. [Example Runbook](#example-runbook)
-8. [Configuration](#configuration)
-9. [Data Persistence](#data-persistence)
-10. [Health Checks](#health-checks)
-11. [Troubleshooting](#troubleshooting)
-12. [Additional Resources](#additional-resources)
+3. [Files](#files)
+4. [Installation](#installation)
+5. [Managing the Service](#managing-the-service)
+6. [Management Script Commands](#management-script-commands)
+7. [Connecting to Valkey](#connecting-to-valkey)
+8. [Usage Examples](#usage-examples)
+9. [Migrating from the Podman Setup](#migrating-from-the-podman-setup)
+10. [Running Without systemd](#running-without-systemd)
+11. [Data Persistence and Backups](#data-persistence-and-backups)
+12. [Health Checks](#health-checks)
+13. [Troubleshooting](#troubleshooting)
+14. [Security Notes](#security-notes)
+15. [Uninstall](#uninstall)
+16. [Additional Resources](#additional-resources)
 
 ---
 
@@ -24,47 +28,70 @@ Valkey is an open-source, Redis-compatible in-memory data store. It is a drop-in
 | Property | Value |
 |----------|-------|
 | Container image | `docker.io/valkey/valkey:latest` |
-| Container name | `valkey-ultra3` |
-| Service user | `jim` |
+| Container name | `valkey` |
+| Service user | `valkey` |
+| systemd unit | `valkey.service` |
+| Network mode | `host` |
 | Port | `6379` |
 | Password | `P@ssword92` |
-| Data path | `/home/jim/.valkey-ultra3/valkey-data` |
-| Config path | `/home/jim/.valkey-ultra3/valkey.conf` |
+| Persistence | Append-only file (AOF) enabled |
+| Data path | `/opt/valkey/.local/share/valkey-data` |
+| Upstream | <https://valkey.io> |
 
 ---
 
 ## Prerequisites
 
-- Podman installed on your system
-- Root / sudo access (for systemd installation)
+- Docker installed and running
+- Root or sudo access
+- Port 6379 free on the host (stop any local Redis first)
+- Optional: `valkey-cli` or `redis-cli` on the host. The container includes `valkey-cli`
+
+---
+
+## Files
+
+| File | Purpose | Installed to |
+|------|---------|--------------|
+| `valkey.sh` | Container management script (`start`, `stop`, `status`, `health`) | `/opt/valkey/valkey.sh` |
+| `valkey.service` | systemd unit file | `/etc/systemd/system/valkey.service` |
+| `install.sh` | One-time installation script (requires root) | Not installed |
+| `uninstall.sh` | Removes the service, and optionally its data and user (requires root) | Not installed |
+| `README.md` | This document | Not installed |
 
 ---
 
 ## Installation
 
-Copy the management script and service file, then enable the service:
+1. Optional: change `PASSWORD` in `valkey.sh`. Unlike the database services, Valkey reads the password on every start, so you can change it later too.
 
-```bash
-sudo cp valkey-ultra3.sh /home/jim/.valkey-ultra3/valkey-ultra3.sh
-sudo chmod +x /home/jim/.valkey-ultra3/valkey-ultra3.sh
+2. Run the install script from this directory:
 
-sudo cp valkey.service /etc/systemd/system/
+   ```bash
+   cd /path/to/Data/valkey
+   sudo ./install.sh
+   ```
 
-sudo systemctl daemon-reload
-sudo systemctl enable valkey.service
-```
+3. Start the service for the first time:
 
-Create the required directories:
+   ```bash
+   sudo systemctl start valkey.service
+   ```
 
-```bash
-mkdir -p /home/jim/.valkey-ultra3/valkey-data
-```
+4. Confirm it is healthy:
 
-After installation, start the service manually for the first time:
+   ```bash
+   sudo -u valkey /opt/valkey/valkey.sh health
+   ```
 
-```bash
-sudo systemctl start valkey.service
-```
+**What `install.sh` does:**
+
+1. Creates the `valkey` system user with home directory `/opt/valkey`
+2. Adds `valkey` to the `docker` group
+3. Enables user lingering (`loginctl enable-linger valkey`)
+4. Copies `valkey.sh` to `/opt/valkey/` and makes it executable
+5. Copies `valkey.service` to `/etc/systemd/system/`
+6. Reloads systemd and enables the service to start on boot
 
 ---
 
@@ -80,7 +107,7 @@ sudo systemctl stop valkey.service
 # Check status
 sudo systemctl status valkey.service
 
-# Enable auto-start on boot
+# Enable auto-start on boot (done by install.sh)
 sudo systemctl enable valkey.service
 
 # Disable auto-start
@@ -89,7 +116,7 @@ sudo systemctl disable valkey.service
 # View logs
 sudo journalctl -xeu valkey.service
 
-# Follow real-time logs
+# Follow logs in real time
 sudo journalctl -fu valkey.service
 ```
 
@@ -97,215 +124,301 @@ sudo journalctl -fu valkey.service
 
 ## Management Script Commands
 
-The `valkey-ultra3.sh` script can be called directly:
+Run the management script directly as the service user:
 
 ```bash
-# Start the container
-/home/jim/.valkey-ultra3/valkey-ultra3.sh start
-
-# Stop the container
-/home/jim/.valkey-ultra3/valkey-ultra3.sh stop
-
-# Check container status
-/home/jim/.valkey-ultra3/valkey-ultra3.sh status
-
-# Run health check (tests PING with valkey-cli)
-/home/jim/.valkey-ultra3/valkey-ultra3.sh health
+sudo -u valkey /opt/valkey/valkey.sh <command>
 ```
 
-The `start` command automatically:
-- Creates the data and config directories if they do not exist
-- Generates a default `valkey.conf` with password and append-only persistence enabled
-- Removes any existing container before starting a fresh one
+| Command | Action |
+|---------|--------|
+| `start` | Removes any existing `valkey` container and starts a new one with the password and AOF persistence set |
+| `stop` | Stops and removes the container |
+| `status` | Shows the container's state (`docker ps -a`) |
+| `health` | Confirms the container is running and an authenticated `PING` returns `PONG` |
 
 ---
 
 ## Connecting to Valkey
 
-### Using valkey-cli (inside the container)
-
-```bash
-podman exec -it valkey-ultra3 valkey-cli -a P@ssword92
-```
-
-### Using redis-cli (from the host, if installed)
-
-```bash
-redis-cli -h localhost -p 6379 -a P@ssword92
-```
-
-### Connection String (StackExchange.Redis / .NET)
-
-```
-localhost:6379,password=P@ssword92
-```
-
-### Connection Details
-
 | Field | Value |
 |-------|-------|
 | Host | `localhost` |
 | Port | `6379` |
+| Username | `default` (or none) |
 | Password | `P@ssword92` |
+
+**Connection strings:**
+
+```text
+# URI (the @ in the password is URL-encoded as %40)
+redis://:P%40ssword92@localhost:6379/0
+
+# StackExchange.Redis (.NET)
+localhost:6379,password=P@ssword92
+```
+
+**From inside the container:**
+
+```bash
+docker exec -it valkey valkey-cli -a 'P@ssword92' --no-auth-warning
+```
+
+**From the host** (if `valkey-cli` or `redis-cli` is installed):
+
+```bash
+valkey-cli -h localhost -p 6379 -a 'P@ssword92' --no-auth-warning
+```
 
 ---
 
-## Example Runbook
+## Usage Examples
 
-### Basic Key-Value Operations
+### valkey-cli
 
-```bash
-# Connect
-podman exec -it valkey-ultra3 valkey-cli -a P@ssword92
+Connect as shown above, then:
 
-# Set a key
+```text
+# Strings, with and without expiry
 SET greeting "Hello, Valkey!"
-
-# Get a key
 GET greeting
-
-# Set a key with expiry (10 seconds)
 SET session:user123 "active" EX 10
-
-# Check TTL
 TTL session:user123
 
-# Delete a key
-DEL greeting
-
-# Check if a key exists
-EXISTS greeting
-```
-
-### Working with Lists
-
-```bash
-# Push items
+# Lists (a simple queue)
 RPUSH queue:jobs "job1" "job2" "job3"
-
-# List length
-LLEN queue:jobs
-
-# Pop from the front
 LPOP queue:jobs
-
-# View all items
 LRANGE queue:jobs 0 -1
-```
 
-### Working with Hashes
-
-```bash
-# Set hash fields
-HSET user:1 name "Alice" email "alice@example.com" role "admin"
-
-# Get a single field
-HGET user:1 name
-
-# Get all fields
+# Hashes
+HSET user:1 name "Alice" email "alice@example.com"
 HGETALL user:1
 
-# Delete a field
-HDEL user:1 role
-```
-
-### Working with Sets
-
-```bash
-# Add members
+# Sets
 SADD tags:article1 "dotnet" "csharp" "azure"
-
-# Check membership
-SISMEMBER tags:article1 "dotnet"
-
-# List all members
 SMEMBERS tags:article1
 ```
 
----
+### .NET
 
-## Configuration
+Requires the `StackExchange.Redis` NuGet package.
 
-The default `valkey.conf` generated by the start script:
+```csharp
+using StackExchange.Redis;
 
-```conf
-requirepass P@ssword92
-appendonly yes
+var redis = await ConnectionMultiplexer.ConnectAsync("localhost:6379,password=P@ssword92");
+var db = redis.GetDatabase();
+
+await db.StringSetAsync("greeting", "Hello, Valkey!");
+Console.WriteLine(await db.StringGetAsync("greeting"));
 ```
 
-| Setting | Description |
-|---------|-------------|
-| `requirepass` | Requires authentication with the given password |
-| `appendonly yes` | Enables AOF (Append-Only File) persistence |
+### Python
 
-To customize the configuration, edit `/home/jim/.valkey-ultra3/valkey.conf` and restart the container:
+Requires `pip install valkey` (or the `redis` package, which also works).
+
+```python
+import valkey
+
+client = valkey.Valkey(host="localhost", port=6379, password="P@ssword92", decode_responses=True)
+client.set("greeting", "Hello, Valkey!")
+print(client.get("greeting"))
+```
+
+---
+
+## Migrating from the Podman Setup
+
+Earlier versions of this directory ran Valkey with Podman as the `jim` user, using `valkey-ultra3.sh`, a container named `valkey-ultra3`, and data in `/home/jim/.valkey-ultra3`. The port and password are unchanged, so clients need no changes. To move existing data to the new setup:
+
+1. Stop and disable the old service, and remove the old container if Podman is still installed:
+
+   ```bash
+   sudo systemctl disable --now valkey.service
+   podman rm -f valkey-ultra3 2>/dev/null || true
+   ```
+
+2. Install the new service, but don't start it yet:
+
+   ```bash
+   cd /path/to/Data/valkey
+   sudo ./install.sh
+   ```
+
+   This replaces `/etc/systemd/system/valkey.service` with the new unit.
+
+3. Copy the old data into the new data directory:
+
+   ```bash
+   sudo mkdir -p /opt/valkey/.local/share/valkey-data
+   sudo cp -a /home/jim/.valkey-ultra3/valkey-data/. /opt/valkey/.local/share/valkey-data/
+   ```
+
+   The container takes ownership of the files when it starts, so no `chown` is needed.
+
+4. Start the new service and check your keys are there:
+
+   ```bash
+   sudo systemctl start valkey.service
+   docker exec valkey valkey-cli -a 'P@ssword92' --no-auth-warning DBSIZE
+   ```
+
+5. When you're satisfied, remove the old files:
+
+   ```bash
+   rm -rf /home/jim/.valkey-ultra3
+   ```
+
+The old `valkey.conf` is not used. Its two settings, `requirepass` and `appendonly yes`, are now passed to `valkey-server` by `valkey.sh`.
+
+---
+
+## Running Without systemd
+
+For a quick test, or on a machine without systemd (such as Windows 11), run the container directly.
+
+**Linux / macOS:**
 
 ```bash
-/home/jim/.valkey-ultra3/valkey-ultra3.sh stop
-/home/jim/.valkey-ultra3/valkey-ultra3.sh start
+docker run -d \
+  --name valkey \
+  -p 6379:6379 \
+  -v $HOME/valkey-data:/data \
+  valkey/valkey:latest \
+  valkey-server --requirepass 'P@ssword92' --appendonly yes
+```
+
+**Windows 11 (PowerShell):**
+
+```powershell
+docker run -d `
+  --name valkey `
+  -p 6379:6379 `
+  -v ${HOME}/valkey-data:/data `
+  valkey/valkey:latest `
+  valkey-server --requirepass 'P@ssword92' --appendonly yes
 ```
 
 ---
 
-## Data Persistence
+## Data Persistence and Backups
 
-Valkey data is stored at:
+Data is stored on the host at `/opt/valkey/.local/share/valkey-data` and mounted into the container at `/data`. With AOF enabled, every write is logged to `appendonlydir/`, so data survives container restarts and re-creation. Valkey may also write `dump.rdb` snapshots there.
 
+**Back up (service stopped):**
+
+```bash
+sudo systemctl stop valkey.service
+sudo tar -czf valkey-backup-$(date +%F).tar.gz -C /opt/valkey/.local/share valkey-data
+sudo systemctl start valkey.service
 ```
-/home/jim/.valkey-ultra3/valkey-data
+
+**Restore:**
+
+```bash
+sudo systemctl stop valkey.service
+sudo rm -rf /opt/valkey/.local/share/valkey-data
+sudo tar -xzf valkey-backup-YYYY-MM-DD.tar.gz -C /opt/valkey/.local/share
+sudo systemctl start valkey.service
 ```
-
-With `appendonly yes` enabled, all writes are recorded in an AOF file, so data survives container restarts.
-
-| Scenario | Data preserved? |
-|----------|----------------|
-| Container stopped | ✅ Yes (AOF) |
-| Container removed | ✅ Yes (volume mount) |
-| System reboot | ✅ Yes |
 
 ---
 
 ## Health Checks
 
 ```bash
-# Verify the container is running
-podman ps --filter "name=valkey-ultra3"
-
-# Send a PING command
-podman exec -i valkey-ultra3 valkey-cli -a P@ssword92 ping
+# Check service status
+sudo systemctl status valkey.service
 
 # Run the built-in health check
-/home/jim/.valkey-ultra3/valkey-ultra3.sh health
+sudo -u valkey /opt/valkey/valkey.sh health
+
+# Check the container's own health status
+docker inspect --format '{{.State.Health.Status}}' valkey
+
+# Send an authenticated PING
+docker exec valkey valkey-cli -a 'P@ssword92' --no-auth-warning ping
+
+# View container logs
+docker logs valkey
 ```
 
-Expected: `PONG` response from the PING command.
+Expected:
+
+- The built-in check prints `Valkey is healthy and accepting connections on port 6379`.
+- `docker inspect` prints `healthy`.
+- `ping` prints `PONG`.
 
 ---
 
 ## Troubleshooting
 
-### Container fails to start
+### `NOAUTH Authentication required`
 
-- Check Podman is installed: `podman --version`
-- Check data/config directory permissions: `ls -la /home/jim/.valkey-ultra3/`
-- View logs: `podman logs valkey-ultra3`
+**Cause:** The client connected without the password.
 
-### Authentication failed
+**Fix:** Pass the password: `-a 'P@ssword92'` for `valkey-cli`, or `password=` in the connection string.
 
-- Confirm the password in `valkey.conf` matches the password used in the `valkey-cli` command
-- Reload the config after changes by restarting the container
+### `WRONGPASS invalid username-password pair`
 
-### Port 6379 already in use
+**Cause:** The client's password does not match `PASSWORD` in the installed `/opt/valkey/valkey.sh`.
+
+**Fix:** Use the password from the installed script, or change `PASSWORD` in `valkey.sh`, reinstall with `sudo ./install.sh`, and restart.
+
+### Service fails to start: port 6379 already in use
+
+**Cause:** A local Redis server, or the old Podman container, is listening on 6379.
+
+**Fix:**
 
 ```bash
-sudo lsof -i :6379
-sudo kill -9 <PID>
+sudo ss -ltnp | grep ':6379\b'
+sudo systemctl disable --now redis-server 2>/dev/null
 ```
+
+### Keys disappear after a restart
+
+**Cause:** The data directory is not mounted, or the container was started by hand without `--appendonly yes`.
+
+**Fix:** Check the mount and the server arguments:
+
+```bash
+docker inspect --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{end}}' valkey
+docker inspect --format '{{.Args}}' valkey
+```
+
+---
+
+## Security Notes
+
+- This setup is for **local development only**.
+- The password `P@ssword92` is hardcoded in `valkey.sh` and visible in the container's command line and health check.
+- With host networking, Valkey listens on the host's interfaces. Block port 6379 at the firewall if the machine is on a shared network. An exposed Valkey or Redis instance can be abused even with a password.
+
+---
+
+## Uninstall
+
+Run the uninstall script from this directory:
+
+```bash
+cd /path/to/Data/valkey
+sudo ./uninstall.sh [--purge-data] [--remove-user]
+```
+
+| Option | Effect |
+|--------|--------|
+| *(none)* | Asks whether to delete the data directory |
+| `--purge-data` | Deletes the data directory without asking |
+| `--remove-user` | Also removes the `valkey` user and disables lingering |
+
+The script always stops and disables the service, removes the container, the unit file, and `/opt/valkey/valkey.sh`. It removes `/opt/valkey` only when data is purged.
 
 ---
 
 ## Additional Resources
 
-- [Valkey GitHub Repository](https://github.com/valkey-io/valkey)
-- [Valkey Documentation](https://valkey.io/docs/)
-- [Redis Commands Reference](https://redis.io/commands/) (compatible with Valkey)
+- [Valkey documentation](https://valkey.io/docs/)
+- [Valkey command reference](https://valkey.io/commands/)
+- [valkey/valkey on Docker Hub](https://hub.docker.com/r/valkey/valkey)
+- [Valkey on GitHub](https://github.com/valkey-io/valkey)

@@ -1,14 +1,14 @@
 services:
   pgsql:
     container_name: pgsql
-    image: postgres:latest
+    image: postgres:18
     restart: unless-stopped
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: P@ssword92
       POSTGRES_DB: default_database
     volumes:
-      - ./db-data:/var/lib/postgresql/data
+      - ./db-data:/var/lib/postgresql
     ports:
       - "5432:5432"
     healthcheck:
