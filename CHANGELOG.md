@@ -28,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - All component READMEs rewritten to the shared templates, adding Data Persistence and Backups, Security Notes, and Uninstall sections and symptom/cause/fix troubleshooting. Each `wiki/` page is an exact copy of its README
 - Valkey moved from Podman as user `jim` (`valkey-ultra3.sh`) to Docker with a dedicated `valkey` user (`valkey.sh`, container `valkey`, data in `/opt/valkey/.local/share/valkey-data`). The password and AOF setting are passed as server arguments instead of a generated `valkey.conf`. The README includes migration steps
-- Seq moved from a Podman pod to Docker: `seq.sh` runs the container on a `seq-network` bridge network, and the separate `seq-docker.sh` script was removed
+- Seq moved from a Podman pod to Docker: `seq.sh` runs the container on a `seq-network` bridge network, and the separate `seq-docker.sh` script was removed. Ports are unchanged (5341 for ingestion, 8081 for the web UI). To migrate from the Podman version, remove the old pod with `podman pod rm -f seqpod` before installing. Its data in `/home/jim/.seq` is not moved automatically; to keep it, run `sudo cp -a /home/jim/.seq/. /opt/seq/.local/share/seq-data/` before the first start
 - SQL Server image upgraded from `mssql/server:2022-latest` to `2025-latest`. SQL Server 2025 upgrades existing data files in place on first start
 - PostgreSQL (`pgsql.sh`, `compose.yml`) pinned to `postgres:18`, with data mounted at `/var/lib/postgresql`
 - Service scripts for Azurite, Seq, and SQL Server standardized, with Docker health check parameters
