@@ -109,6 +109,14 @@ RESTful API mock server — multiple instances on ports 3010, 3011, 3012
 - Each service references a per-port db file at `/opt/json-server/db*.json`
 - Runs as `jsonserver` user
 
+### paperless/
+Paperless-ngx document management system
+- Image: `ghcr.io/paperless-ngx/paperless-ngx:latest`
+- Port 8000, bound to `127.0.0.1` by default
+- Uses a custom Docker bridge network `paperless-network` with dedicated `paperless-db` (`postgres:18`, pinned) and `paperless-broker` (`valkey:9-alpine`) containers, neither published to the host
+- Secret key is generated on first start in `/opt/paperless/.config/paperless/secret_key`
+- Data paths: `/opt/paperless/.local/share/paperless-data`, `paperless-db-data`, `paperless-broker-data`
+
 ### pgsql/
 PostgreSQL database
 - Image: `postgres:18` (pinned: major version upgrades require a data migration)

@@ -1,0 +1,20 @@
+[Unit]
+Description=Paperless-ngx Container Service
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/paperless/paperless.sh start
+ExecStop=/opt/paperless/paperless.sh stop
+ExecReload=/opt/paperless/paperless.sh status
+RemainAfterExit=true
+User=paperless
+Group=paperless
+TimeoutStartSec=600
+TimeoutStopSec=90
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

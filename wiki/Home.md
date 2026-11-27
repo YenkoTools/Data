@@ -12,6 +12,7 @@ Welcome to the **Data Tools** wiki. This project provides management scripts and
 | [Dockhand](Dockhand) | Modern Docker management UI with container and stack orchestration | 3000 |
 | [Gitea](Gitea) | Self-hosted Git service with web UI, issues, pull requests, and Actions (with dedicated PostgreSQL) | 3001, 2222 |
 | [JSON Server](JSON-Server) | Fake REST API server for testing and prototyping | 3010, 3011, 3012 |
+| [Paperless-ngx](Paperless-ngx) | Document management system with OCR and search (with dedicated PostgreSQL and Valkey) | 8000 |
 | [PostgreSQL](PostgreSQL) | PostgreSQL 18 database as a systemd-managed Docker container | 5432 |
 | [PowerShell](PowerShell) | Installs PowerShell 7 on the host (tool, not a service) | — |
 | [Qdrant](Qdrant) | High-performance vector database and similarity search engine | 6333, 6334 |

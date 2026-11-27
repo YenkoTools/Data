@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Paperless-ngx service (`paperless/`): document management on port 8000 (localhost only by default), with dedicated `paperless-db` (`postgres:18`) and `paperless-broker` (Valkey) containers on a private `paperless-network` bridge network
+
 ### Removed
 - `git-tag.ps1`: tag releases with `git tag -a` and `git push origin <tag>` directly
 
