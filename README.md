@@ -70,6 +70,18 @@ See [json-server/README.md](json-server/README.md) for configuration details.
 
 Resource: https://github.com/typicode/json-server
 
+### paperless/
+Management scripts to run Paperless-ngx, a self-hosted document management system, as a systemd service.
+
+- Systemd service integration with auto-start on boot
+- Web UI and REST API on port 8000 (localhost only by default)
+- Dedicated PostgreSQL (`paperless-db`) and Valkey broker (`paperless-broker`) containers on a private Docker network
+- Document consume and export folders, persistent data storage, and health check monitoring
+
+See [paperless/README.md](paperless/README.md) for detailed setup and usage instructions.
+
+Resource: https://github.com/paperless-ngx/paperless-ngx
+
 ### pgsql/
 Management scripts to run PostgreSQL as a systemd-managed Docker container.
 
